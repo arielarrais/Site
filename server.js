@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = process.env.PORT || 3001;
-const dbPath = path.join(__dirname, 'database.sqlite');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
 const db = new sqlite3.Database(dbPath);
 
 app.use(express.json());
@@ -719,12 +719,16 @@ function seedAssetsDatabase() {
   console.log(`${count} ativos inseridos no banco.`);
 }
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   initDb();
   migratePortfolioTableIfNeeded();
   migrateDividendTableIfNeeded();
   migrateB3AssetsTableIfNeeded();
   migrateUsersTableIfNeeded();
   seedAssetsDatabase();
-  console.log(`Servidor rodando em http://localhost:${port}`);
+  const ip = require('os').networkInterfaces();
+  const localIp = Object.values(ip).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';
+  console.log(`Servidor rodando em:`);
+  console.log(`  Local:    http://localhost:${port}`);
+  console.log(`  Rede:     http://${localIp}:${port}`);
 });
