@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="top-nav-brand"><span id="display-user"></span></div>
+    <div class="top-nav-actions">
+      <button id="admin-button" class="btn btn-secondary hidden">Admin</button>
+      <button id="logout-button" class="btn btn-danger">Sair</button>
+    </div>
+  </nav>
+  <div class="container dashboard-active" id="main-container">
+    <div class="card dashboard-card" id="dashboard-card">
+      <div class="dashboard-content">
+        <div id="portfolio-panel" class="portfolio-panel">
+          <div class="info-box">
+            <div class="portfolio-header">
+              <h2>Buscar ativo</h2>
+            </div>
+            <form id="asset-search-form" class="asset-search-form">
+              <div class="input-group">
+                <label for="asset-query">Buscar ativo B3 / FII ou qualquer ticker</label>
+                <input id="asset-query" type="text" placeholder="Ex: PETR4, VGHF11 ou MGLU3" autocomplete="off" />
+              </div>
+              <button type="submit" class="btn btn-primary">Procurar ativo</button>
+            </form>
+            <div id="search-result" class="search-result hidden"></div>
+          </div>
+
+          <div class="info-box">
+            <div class="portfolio-list-card">
+              <div class="portfolio-list-header">
+                <h2>Ativos cadastrados</h2>
+                <p id="portfolio-summary" class="small-note"></p>
+              </div>
+              <div id="portfolio-list" class="portfolio-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay hidden" id="dividend-modal">
+    <div class="modal modal-wide">
+      <h2>Dividendos - <span id="dividend-modal-ticker"></span></h2>
+      <div id="dividend-list" class="dividend-list"></div>
+      <div class="modal-actions">
+        <button type="button" id="dividend-modal-close" class="btn btn-secondary" style="width:auto">Fechar</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

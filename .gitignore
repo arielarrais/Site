@@ -1,0 +1,6 @@
+node_modules/
+database.sqlite
+.env
+_check.js
+npm-debug.log*
+.DS_Store
