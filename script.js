@@ -448,7 +448,7 @@ if (isDashboard) {
           ${group.items.slice().sort((a, b) => {
             const dateA = a.purchaseDate || a.purchasedAt || '';
             const dateB = b.purchaseDate || b.purchasedAt || '';
-            return dateA.localeCompare(dateB);
+            return dateB.localeCompare(dateA);
           }).map((item) => {
             const itemCurrentPrice = getAssetCurrentPrice(item.ticker);
             const itemValue = itemCurrentPrice * item.quantity;
@@ -459,7 +459,7 @@ if (isDashboard) {
               <div class="grid-detail-row">
                 <div class="grid-detail-cell">
                   <span class="detail-label">Data</span>
-                  <span>${itemDate || '—'}</span>
+                  <span>${formatDateBR(itemDate)}</span>
                 </div>
                 <div class="grid-detail-cell">
                   <span class="detail-label">Qtd</span>
