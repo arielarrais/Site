@@ -185,6 +185,39 @@ if (isDashboard) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
 
+  function enhanceDateInputs() {
+    document.querySelectorAll('input[type="date"].date-br').forEach(input => {
+      if (input.dataset.enhanced) return;
+      input.dataset.enhanced = '1';
+
+      const wrap = document.createElement('span');
+      wrap.className = 'date-br-wrap';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+
+      const display = document.createElement('span');
+      display.className = 'date-br-display';
+      display.textContent = input.value ? isoToDateBR(input.value) : 'DD/MM/AAAA';
+      wrap.appendChild(display);
+
+      input.classList.add('date-br-native');
+      function syncDisplay() {
+        display.textContent = input.value ? isoToDateBR(input.value) : 'DD/MM/AAAA';
+      }
+      input.addEventListener('change', syncDisplay);
+      input.addEventListener('input', syncDisplay);
+      display.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof input.showPicker === 'function') {
+          input.showPicker();
+        } else {
+          input.focus();
+        }
+      });
+      display.addEventListener('focus', () => input.focus());
+    });
+  }
+
   async function findAsset(query) {
     const formatted = query.trim().toUpperCase();
     if (!formatted) return null;
@@ -330,19 +363,20 @@ if (isDashboard) {
         </label>
         <label>
           Data da compra
-          <input id="asset-purchase-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToDateBR(getTodayInputValue())}" />
+          <input id="asset-purchase-date" type="date" class="date-br" value="${getTodayInputValue()}" />
         </label>
         <button id="add-asset-button" class="btn btn-primary btn-buy">Cadastrar compra</button>
       </div>
     `;
     searchResult.classList.remove('hidden');
+    enhanceDateInputs();
     document.getElementById('add-asset-button').addEventListener('click', async () => {
       const quantity = Number(document.getElementById('asset-quantity').value);
       const purchasePrice = Number(document.getElementById('asset-purchase-price').value);
-      const purchaseDate = dateToISO(document.getElementById('asset-purchase-date').value);
+      const purchaseDate = document.getElementById('asset-purchase-date').value;
       if (!quantity || quantity < 1) { alert('Informe uma quantidade válida.'); return; }
       if (!purchasePrice || purchasePrice <= 0) { alert('Informe um preço de compra válido.'); return; }
-      if (!purchaseDate) { alert('Informe a data da compra (DD/MM/YYYY).'); return; }
+      if (!purchaseDate) { alert('Informe a data da compra.'); return; }
       try {
         await addAssetToPortfolio(asset.ticker, quantity, purchasePrice, purchaseDate);
         searchResult.classList.add('hidden');
@@ -502,7 +536,7 @@ if (isDashboard) {
                 <div class="add-launch-inner">
                   <label>Quantidade <input class="el-quantity" type="number" min="1" step="1" value="${item.quantity}" /></label>
                   <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${(item.purchasePrice ?? itemCurrentPrice).toFixed(2)}" /></label>
-                  <label>Data <input class="el-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${itemDate ? isoToDateBR(itemDate) : isoToDateBR(getTodayInputValue())}" /></label>
+                  <label>Data <input class="el-date date-br" type="date" value="${itemDate || getTodayInputValue()}" /></label>
                   <button class="btn btn-primary el-save" type="button" data-id="${item.id}" style="width:auto">Salvar</button>
                   <button class="el-cancel" type="button" style="width:auto">Cancelar</button>
                 </div>
@@ -513,7 +547,7 @@ if (isDashboard) {
             <div class="add-launch-inner">
               <label>Quantidade <input class="al-quantity" type="number" min="1" step="1" value="1" /></label>
               <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${currentPrice.toFixed(2)}" /></label>
-              <label>Data <input class="al-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToDateBR(getTodayInputValue())}" /></label>
+              <label>Data <input class="al-date date-br" type="date" value="${getTodayInputValue()}" /></label>
               <button class="btn btn-primary al-save" type="button" data-ticker="${group.ticker}" style="width:auto">Salvar</button>
             </div>
           </div>
@@ -566,6 +600,7 @@ if (isDashboard) {
       const btn = portfolioListElement.querySelector(`.group-toggle-button[data-group="${t}"]`);
       if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
     });
+    enhanceDateInputs();
   }
 
   async function addAssetToPortfolio(ticker, quantity, purchasePrice, purchaseDate) {
@@ -676,10 +711,10 @@ if (isDashboard) {
       const form = saveBtn.closest('.add-launch-form');
       const quantity = Number(form.querySelector('.al-quantity').value);
       const price = Number(form.querySelector('.al-price').value);
-      const date = dateToISO(form.querySelector('.al-date').value);
+      const date = form.querySelector('.al-date').value;
       if (!quantity || quantity < 1) { alert('Quantidade inválida.'); return; }
       if (!price || price <= 0) { alert('Preço inválido.'); return; }
-      if (!date) { alert('Data inválida (DD/MM/YYYY).'); return; }
+      if (!date) { alert('Data inválida.'); return; }
       try {
         await addAssetToPortfolio(ticker, quantity, price, date);
         form.classList.add('hidden');
@@ -709,10 +744,10 @@ if (isDashboard) {
       const form = elSaveBtn.closest('.edit-launch-form');
       const quantity = Number(form.querySelector('.el-quantity').value);
       const price = Number(form.querySelector('.el-price').value);
-      const date = dateToISO(form.querySelector('.el-date').value);
+      const date = form.querySelector('.el-date').value;
       if (!quantity || quantity < 1) { alert('Quantidade inválida.'); return; }
       if (!price || price <= 0) { alert('Preço inválido.'); return; }
-      if (!date) { alert('Data inválida (DD/MM/YYYY).'); return; }
+      if (!date) { alert('Data inválida.'); return; }
       await updateAssetInPortfolio(id, quantity, price, date);
       form.classList.add('hidden');
       return;

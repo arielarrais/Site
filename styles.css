@@ -286,6 +286,41 @@ input:focus {
   color: #e74c3c;
 }
 
+.date-br-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+
+.date-br-native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+}
+
+.date-br-display {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.date-br-display:empty::before {
+  content: 'DD/MM/AAAA';
+  color: #999;
+}
+
 .portfolio-panel {
   margin-top: 12px;
   display: grid;
