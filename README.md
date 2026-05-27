@@ -16,9 +16,37 @@ Painel web para acompanhamento de carteira de ações e FIIs da B3, com cálculo
 |---|---|
 | **Node.js** | Runtime rápido e familiar para APIs REST |
 | **Express** | Framework minimalista e maduro para roteamento HTTP |
-| **SQLite** | Banco zero configuração, sem servidor externo, ideal para projetos individuais |
+| **PostgreSQL** | Banco relacional robusto, utilizado em produção via Railway |
 | **Vanilla JS** | Sem dependência de framework — projeto pequeno, sem necessidade de React/Vue |
 | **Brapi.dev** | API gratuita e completa com dados de ações e FIIs brasileiros |
+
+## Pré-requisitos
+
+- **Node.js 18+**
+- **PostgreSQL 15+** rodando localmente
+
+## Configuração do banco
+
+Crie o banco de dados:
+
+```bash
+psql -U postgres -c "CREATE DATABASE site_db;"
+```
+
+Copie o arquivo `.env.example` para `.env` e ajuste se necessário:
+
+```env
+DATABASE_URL=postgresql://postgres:admin@localhost:5432/site_db
+BRAPI_TOKEN=seu_token_aqui
+```
+
+## Migração dos dados (SQLite → PostgreSQL)
+
+Se já utilizava o projeto com SQLite, migre os dados:
+
+```bash
+node _migrate.js
+```
 
 ## Como rodar
 

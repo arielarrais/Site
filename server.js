@@ -2,13 +2,15 @@
 
 const express = require('express');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = process.env.PORT || 3001;
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
-const db = new sqlite3.Database(dbPath);
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
+});
 
 app.use(express.json());
 
@@ -24,156 +26,132 @@ app.use(express.static(path.join(__dirname)));
 const brapiTokenStatus = process.env.BRAPI_TOKEN ? 'loaded' : 'missing';
 console.log(`BRAPI_TOKEN ${brapiTokenStatus}`);
 
-function initDb() {
-  db.serialize(() => {
-    db.run(
-      `CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        fullName TEXT
-      )`
-    );
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE,
+      password TEXT,
+      fullname TEXT,
+      email TEXT
+    )
+  `);
 
-    db.run(
-      `CREATE TABLE IF NOT EXISTS portfolio_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userId INTEGER,
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS portfolio_items (
+      id SERIAL PRIMARY KEY,
+      userid INTEGER,
+      ticker TEXT,
+      quantity INTEGER,
+      purchaseprice DOUBLE PRECISION,
+      purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS b3_assets (
+      id SERIAL PRIMARY KEY,
+      ticker TEXT UNIQUE,
+      name TEXT,
+      assettype TEXT,
+      createdat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+      longname TEXT,
+      sector TEXT,
+      regularmarketprice TEXT,
+      logourl TEXT
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS asset_dividends (
+      id SERIAL PRIMARY KEY,
+      assetid INTEGER,
+      paymentdate TEXT,
+      grossamount DOUBLE PRECISION,
+      netamount DOUBLE PRECISION,
+      description TEXT,
+      createdat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+      comdate TEXT
+    )
+  `);
+
+  const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', ['admin']);
+  if (rows.length === 0) {
+    const passwordHash = bcrypt.hashSync('123456', 10);
+    await pool.query(
+      'INSERT INTO users (username, password, fullname) VALUES ($1, $2, $3)',
+      ['admin', passwordHash, 'Administrador']
+    );
+    console.log('Usuário inicial criado: admin / 123456');
+  }
+}
+
+async function migrateDividendTableIfNeeded() {
+  const { rows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'asset_dividends' AND column_name = 'comdate'
+  `);
+  if (rows.length === 0) {
+    await pool.query('ALTER TABLE asset_dividends ADD COLUMN comdate TEXT');
+    console.log('Coluna comdate adicionada em asset_dividends.');
+  }
+}
+
+async function migrateB3AssetsTableIfNeeded() {
+  const existing = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'b3_assets'
+  `);
+  const cols = existing.rows.map(r => r.column_name);
+  const needed = ['longname', 'logourl', 'sector', 'regularmarketprice'];
+  for (const col of needed) {
+    if (!cols.includes(col)) {
+      await pool.query(`ALTER TABLE b3_assets ADD COLUMN ${col} TEXT`);
+      console.log(`Coluna ${col} adicionada em b3_assets.`);
+    }
+  }
+}
+
+async function migratePortfolioTableIfNeeded() {
+  const { rows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'portfolio_items' AND column_name = 'purchasedate'
+  `);
+  if (rows.length > 0) {
+    await pool.query('DROP TABLE IF EXISTS portfolio_items_new');
+    await pool.query(`
+      CREATE TABLE portfolio_items_new (
+        id SERIAL PRIMARY KEY,
+        userid INTEGER,
         ticker TEXT,
         quantity INTEGER,
-        purchasePrice REAL,
-        purchasedAt TEXT DEFAULT (datetime('now'))
-      )`
-    );
-
-    db.run(
-      `CREATE TABLE IF NOT EXISTS b3_assets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ticker TEXT UNIQUE,
-        name TEXT,
-        assetType TEXT,
-        createdAt TEXT DEFAULT (datetime('now'))
-      )`
-    );
-
-    db.run(
-      `CREATE TABLE IF NOT EXISTS asset_dividends (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        assetId INTEGER,
-        paymentDate TEXT,
-        grossAmount REAL,
-        netAmount REAL,
-        description TEXT,
-        createdAt TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY(assetId) REFERENCES b3_assets(id)
-      )`
-    );
-
-    db.get('SELECT id FROM users WHERE username = ?', ['admin'], (err, row) => {
-      if (err) {
-        console.error('Erro ao buscar usuário inicial:', err);
-        return;
-      }
-
-      if (!row) {
-        const passwordHash = bcrypt.hashSync('123456', 10);
-        db.run(
-          'INSERT INTO users (username, password, fullName) VALUES (?, ?, ?)',
-          ['admin', passwordHash, 'Administrador'],
-          (insertErr) => {
-            if (insertErr) {
-              console.error('Erro ao inserir usuário inicial:', insertErr);
-            } else {
-              console.log('Usuário inicial criado: admin / 123456');
-            }
-          }
-        );
-      }
-    });
-  });
+        purchaseprice DOUBLE PRECISION,
+        purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+      )
+    `);
+    await pool.query(`
+      INSERT INTO portfolio_items_new (id, userid, ticker, quantity, purchaseprice, purchasedat)
+      SELECT id, userid, ticker, quantity, purchaseprice, purchasedat FROM portfolio_items
+    `);
+    await pool.query('DROP TABLE portfolio_items');
+    await pool.query('ALTER TABLE portfolio_items_new RENAME TO portfolio_items');
+    await pool.query("SELECT setval('portfolio_items_id_seq', (SELECT COALESCE(MAX(id),1) FROM portfolio_items))");
+    console.log('Tabela portfolio_items migrada para permitir lançamentos duplicados.');
+  }
 }
 
-function migrateDividendTableIfNeeded() {
-  db.get(
-    "SELECT sql FROM sqlite_master WHERE type='table' AND name='asset_dividends'",
-    (err, row) => {
-      if (err || !row || !row.sql) return;
-      if (!/comDate/i.test(row.sql)) {
-        db.run('ALTER TABLE asset_dividends ADD COLUMN comDate TEXT', (alterErr) => {
-          if (alterErr) console.error('Erro ao adicionar coluna comDate:', alterErr);
-          else console.log('Coluna comDate adicionada em asset_dividends.');
-        });
-      }
-    }
-  );
+async function migrateUsersTableIfNeeded() {
+  const { rows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'email'
+  `);
+  if (rows.length === 0) {
+    await pool.query('ALTER TABLE users ADD COLUMN email TEXT');
+    console.log('Coluna email adicionada em users.');
+  }
 }
 
-function migrateB3AssetsTableIfNeeded() {
-  const columns = ['longName', 'logoUrl', 'sector', 'regularMarketPrice'];
-  db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='b3_assets'", (err, row) => {
-    if (err || !row || !row.sql) return;
-    columns.forEach(col => {
-      if (!new RegExp(`\\b${col}\\b`, 'i').test(row.sql)) {
-        db.run(`ALTER TABLE b3_assets ADD COLUMN ${col} TEXT`, (alterErr) => {
-          if (alterErr) console.error(`Erro ao adicionar coluna ${col}:`, alterErr);
-          else console.log(`Coluna ${col} adicionada em b3_assets.`);
-        });
-      }
-    });
-  });
-}
-
-function migratePortfolioTableIfNeeded() {
-  db.get(
-    "SELECT sql FROM sqlite_master WHERE type='table' AND name='portfolio_items'",
-    (err, row) => {
-      if (err || !row || !row.sql) {
-        return;
-      }
-      if (row.sql.includes('purchaseDate')) {
-        db.serialize(() => {
-          db.run('DROP TABLE IF EXISTS portfolio_items_new');
-          db.run(
-            `CREATE TABLE IF NOT EXISTS portfolio_items_new (
-               id INTEGER PRIMARY KEY AUTOINCREMENT,
-               userId INTEGER,
-               ticker TEXT,
-               quantity INTEGER,
-               purchasePrice REAL,
-               purchasedAt TEXT DEFAULT (datetime('now'))
-             );
-             INSERT INTO portfolio_items_new (id, userId, ticker, quantity, purchasePrice, purchasedAt)
-               SELECT id, userId, ticker, quantity, purchasePrice, purchasedAt FROM portfolio_items;
-             DROP TABLE portfolio_items;
-             ALTER TABLE portfolio_items_new RENAME TO portfolio_items;
-            `,
-            (migrateErr) => {
-              if (migrateErr) {
-                console.error('Erro ao migrar tabela portfolio_items:', migrateErr);
-              } else {
-                console.log('Tabela portfolio_items migrada para permitir lançamentos duplicados.');
-              }
-            }
-          );
-        });
-      }
-    }
-  );
-}
-
-function migrateUsersTableIfNeeded() {
-  db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
-    if (err || !row || !row.sql) return;
-    if (!/email/i.test(row.sql)) {
-      db.run('ALTER TABLE users ADD COLUMN email TEXT', (alterErr) => {
-        if (alterErr) console.error('Erro ao adicionar coluna email:', alterErr);
-        else console.log('Coluna email adicionada em users.');
-      });
-    }
-  });
-}
-
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { username, password, fullName, email } = req.body;
 
   if (!username || !password) {
@@ -183,105 +161,99 @@ app.post('/api/register', (req, res) => {
     return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres.' });
   }
 
-  db.get('SELECT id FROM users WHERE username = ?', [username], (err, row) => {
-    if (err) {
-      console.error('Erro ao verificar usuário:', err);
-      return res.status(500).json({ error: 'Erro interno do servidor.' });
-    }
-    if (row) {
+  try {
+    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+    if (rows.length > 0) {
       return res.status(400).json({ error: 'Usuário já existe.' });
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
-    db.run(
-      'INSERT INTO users (username, password, fullName, email) VALUES (?, ?, ?, ?)',
-      [username, passwordHash, fullName || username, email || null],
-      function (insertErr) {
-        if (insertErr) {
-          console.error('Erro ao criar usuário:', insertErr);
-          return res.status(500).json({ error: 'Erro ao criar usuário.' });
-        }
-        res.json({ id: this.lastID, username, fullName: fullName || username, email });
-      }
+    const result = await pool.query(
+      'INSERT INTO users (username, password, fullname, email) VALUES ($1, $2, $3, $4) RETURNING id, username, fullname, email',
+      [username, passwordHash, fullName || username, email || null]
     );
-  });
+    const user = result.rows[0];
+    res.json({ id: user.id, username: user.username, fullName: user.fullname, email: user.email });
+  } catch (err) {
+    console.error('Erro ao criar usuário:', err);
+    res.status(500).json({ error: 'Erro ao criar usuário.' });
+  }
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
   }
 
-  db.get(
-    'SELECT id, username, password, fullName FROM users WHERE username = ?',
-    [username],
-    (err, user) => {
-      if (err) {
-        console.error('Erro ao buscar usuário:', err);
-        return res.status(500).json({ error: 'Erro interno do servidor.' });
-      }
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, username, password, fullname FROM users WHERE username = $1',
+      [username]
+    );
 
-      if (!user || !bcrypt.compareSync(password, user.password)) {
-        return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
-      }
-
-      res.json({ id: user.id, username: user.username, fullName: user.fullName });
+    if (rows.length === 0 || !bcrypt.compareSync(password, rows[0].password)) {
+      return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
     }
-  );
+
+    const user = rows[0];
+    res.json({ id: user.id, username: user.username, fullName: user.fullname });
+  } catch (err) {
+    console.error('Erro ao buscar usuário:', err);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
 });
 
-app.get('/api/portfolio', (req, res) => {
+app.get('/api/portfolio', async (req, res) => {
   const userId = Number(req.query.userId);
   if (!userId) {
     return res.status(400).json({ error: 'userId é obrigatório.' });
   }
 
-  db.all(
-    'SELECT id, ticker, quantity, purchasePrice, purchasedAt AS purchaseDate FROM portfolio_items WHERE userId = ? ORDER BY purchasedAt ASC, id ASC',
-    [userId],
-    (err, rows) => {
-      if (err) {
-        console.error('Erro ao buscar carteira:', err);
-        return res.status(500).json({ error: 'Erro ao buscar carteira.' });
-      }
-      res.json(rows);
-    }
-  );
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, ticker, quantity, purchaseprice, purchasedat AS purchasdate FROM portfolio_items WHERE userid = $1 ORDER BY purchasedat ASC, id ASC',
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar carteira:', err);
+    res.status(500).json({ error: 'Erro ao buscar carteira.' });
+  }
 });
 
-app.get('/api/portfolio/dividend-returns', (req, res) => {
+app.get('/api/portfolio/dividend-returns', async (req, res) => {
   const userId = Number(req.query.userId);
   if (!userId) return res.status(400).json({ error: 'userId é obrigatório.' });
-  db.all(
-    `SELECT a.ticker,
-       COALESCE(SUM(
-         d.grossAmount * (
-           SELECT COALESCE(SUM(p.quantity), 0)
-           FROM portfolio_items p
-           WHERE p.ticker = a.ticker AND p.userId = ? AND p.purchasedAt <= d.comDate
-         )
-       ), 0) as totalDividends
-     FROM asset_dividends d
-     JOIN b3_assets a ON d.assetId = a.id
-     WHERE EXISTS (
-       SELECT 1 FROM portfolio_items p
-       WHERE p.ticker = a.ticker AND p.userId = ? AND p.purchasedAt <= d.comDate
-     )
-     GROUP BY a.ticker`,
-    [userId, userId],
-    (err, rows) => {
-      if (err) {
-        console.error('Erro ao calcular dividendos:', err);
-        return res.status(500).json({ error: 'Erro ao calcular dividendos.' });
-      }
-      res.json(rows);
-    }
-  );
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.ticker,
+        COALESCE(SUM(
+          d.grossamount * (
+            SELECT COALESCE(SUM(p.quantity), 0)
+            FROM portfolio_items p
+            WHERE p.ticker = a.ticker AND p.userid = $1 AND p.purchasedat <= d.comdate
+          )
+        ), 0) as totaldividends
+      FROM asset_dividends d
+      JOIN b3_assets a ON d.assetid = a.id
+      WHERE EXISTS (
+        SELECT 1 FROM portfolio_items p
+        WHERE p.ticker = a.ticker AND p.userid = $1 AND p.purchasedat <= d.comdate
+      )
+      GROUP BY a.ticker`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao calcular dividendos:', err);
+    res.status(500).json({ error: 'Erro ao calcular dividendos.' });
+  }
 });
 
-app.post('/api/portfolio', (req, res) => {
+app.post('/api/portfolio', async (req, res) => {
   const { userId, ticker, quantity, purchasePrice, purchaseDate } = req.body;
   if (!userId || !ticker || !quantity || !purchasePrice || !purchaseDate) {
     return res.status(400).json({ error: 'userId, ticker, quantidade, preço de compra e data são obrigatórios.' });
@@ -300,20 +272,20 @@ app.post('/api/portfolio', (req, res) => {
     return res.status(400).json({ error: 'Data de compra deve estar no formato YYYY-MM-DD.' });
   }
 
-  db.run(
-    'INSERT INTO portfolio_items (userId, ticker, quantity, purchasePrice, purchasedAt) VALUES (?, ?, ?, ?, ?)',
-    [userId, normalizedTicker, qty, price, purchaseDateValue],
-    function (insertErr) {
-      if (insertErr) {
-        console.error('Erro ao inserir item na carteira:', insertErr);
-        return res.status(500).json({ error: 'Erro ao salvar item da carteira.' });
-      }
-      res.json({ id: this.lastID, ticker: normalizedTicker, quantity: qty, purchasePrice: price, purchaseDate: purchaseDateValue });
-    }
-  );
+  try {
+    const result = await pool.query(
+      'INSERT INTO portfolio_items (userid, ticker, quantity, purchaseprice, purchasedat) VALUES ($1, $2, $3, $4, $5) RETURNING id, ticker, quantity, purchaseprice, purchasedat',
+      [userId, normalizedTicker, qty, price, purchaseDateValue]
+    );
+    const item = result.rows[0];
+    res.json({ id: item.id, ticker: item.ticker, quantity: item.quantity, purchasePrice: item.purchaseprice, purchaseDate: item.purchasedat });
+  } catch (err) {
+    console.error('Erro ao inserir item na carteira:', err);
+    res.status(500).json({ error: 'Erro ao salvar item da carteira.' });
+  }
 });
 
-app.put('/api/portfolio', (req, res) => {
+app.put('/api/portfolio', async (req, res) => {
   const { id, userId, quantity, purchasePrice, purchaseDate } = req.body;
   if (!id || !userId) {
     return res.status(400).json({ error: 'id e userId são obrigatórios.' });
@@ -335,32 +307,31 @@ app.put('/api/portfolio', (req, res) => {
 
   const fields = [];
   const params = [];
-  if (qty != null) { fields.push('quantity = ?'); params.push(qty); }
-  if (price != null) { fields.push('purchasePrice = ?'); params.push(price); }
-  if (date != null) { fields.push('purchasedAt = ?'); params.push(date); }
+  if (qty != null) { fields.push('quantity = $' + (params.length + 1)); params.push(qty); }
+  if (price != null) { fields.push('purchaseprice = $' + (params.length + 1)); params.push(price); }
+  if (date != null) { fields.push('purchasedat = $' + (params.length + 1)); params.push(date); }
 
   if (!fields.length) {
     return res.status(400).json({ error: 'Nenhum campo para atualizar.' });
   }
 
   params.push(Number(id), Number(userId));
-  db.run(
-    `UPDATE portfolio_items SET ${fields.join(', ')} WHERE id = ? AND userId = ?`,
-    params,
-    function (err) {
-      if (err) {
-        console.error('Erro ao atualizar item da carteira:', err);
-        return res.status(500).json({ error: 'Erro ao atualizar item da carteira.' });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Item não encontrado.' });
-      }
-      res.json({ id: Number(id), quantity: qty, purchasePrice: price, purchaseDate: date });
+  try {
+    const result = await pool.query(
+      `UPDATE portfolio_items SET ${fields.join(', ')} WHERE id = $${params.length - 1} AND userid = $${params.length} RETURNING id`,
+      params
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Item não encontrado.' });
     }
-  );
+    res.json({ id: Number(id), quantity: qty, purchasePrice: price, purchaseDate: date });
+  } catch (err) {
+    console.error('Erro ao atualizar item da carteira:', err);
+    res.status(500).json({ error: 'Erro ao atualizar item da carteira.' });
+  }
 });
 
-app.delete('/api/portfolio', (req, res) => {
+app.delete('/api/portfolio', async (req, res) => {
   const userId = Number(req.query.userId);
   const id = Number(req.query.id);
 
@@ -368,85 +339,87 @@ app.delete('/api/portfolio', (req, res) => {
     return res.status(400).json({ error: 'userId e id são obrigatórios.' });
   }
 
-  db.run(
-    'DELETE FROM portfolio_items WHERE userId = ? AND id = ?',
-    [userId, id],
-    function (err) {
-      if (err) {
-        console.error('Erro ao remover item da carteira:', err);
-        return res.status(500).json({ error: 'Erro ao remover item da carteira.' });
-      }
-      res.json({ success: true });
-    }
-  );
-});
-
-app.get('/api/b3-assets', (req, res) => {
-  const query = (req.query.q || '').trim().toUpperCase();
-  let sql, params;
-  if (query) {
-    sql = 'SELECT id, ticker, name, assetType FROM b3_assets WHERE ticker LIKE ? OR name LIKE ? ORDER BY ticker LIMIT 30';
-    params = [`%${query}%`, `%${query}%`];
-  } else {
-    sql = 'SELECT id, ticker, name, assetType FROM b3_assets ORDER BY assetType, ticker';
-    params = [];
+  try {
+    await pool.query('DELETE FROM portfolio_items WHERE userid = $1 AND id = $2', [userId, id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao remover item da carteira:', err);
+    res.status(500).json({ error: 'Erro ao remover item da carteira.' });
   }
-  db.all(sql, params, (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar ativos B3:', err);
-      return res.status(500).json({ error: 'Erro ao buscar ativos B3.' });
-    }
-    res.json(rows);
-  });
 });
 
-app.post('/api/b3-assets', (req, res) => {
+app.get('/api/b3-assets', async (req, res) => {
+  const query = (req.query.q || '').trim().toUpperCase();
+  try {
+    let result;
+    if (query) {
+      result = await pool.query(
+        'SELECT id, ticker, name, assettype FROM b3_assets WHERE ticker LIKE $1 OR name LIKE $1 ORDER BY ticker LIMIT 30',
+        [`%${query}%`]
+      );
+    } else {
+      result = await pool.query(
+        'SELECT id, ticker, name, assettype FROM b3_assets ORDER BY assettype, ticker'
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar ativos B3:', err);
+    res.status(500).json({ error: 'Erro ao buscar ativos B3.' });
+  }
+});
+
+app.post('/api/b3-assets', async (req, res) => {
   const { ticker, name, assetType } = req.body;
   if (!ticker || !name) {
     return res.status(400).json({ error: 'Ticker e nome são obrigatórios.' });
   }
 
   const normalizedTicker = String(ticker).trim().toUpperCase();
-  db.run(
-    'INSERT INTO b3_assets (ticker, name, assetType) VALUES (?, ?, ?)',
-    [normalizedTicker, String(name).trim(), assetType ? String(assetType).trim() : null],
-    function (err) {
-      if (err) {
-        console.error('Erro ao salvar ativo B3:', err);
-        return res.status(500).json({ error: 'Erro ao salvar ativo B3.' });
-      }
-      res.json({ id: this.lastID, ticker: normalizedTicker, name, assetType });
-    }
-  );
+  try {
+    const result = await pool.query(
+      'INSERT INTO b3_assets (ticker, name, assettype) VALUES ($1, $2, $3) RETURNING id, ticker, name, assettype',
+      [normalizedTicker, String(name).trim(), assetType ? String(assetType).trim() : null]
+    );
+    const item = result.rows[0];
+    res.json({ id: item.id, ticker: item.ticker, name: item.name, assetType: item.assettype });
+  } catch (err) {
+    console.error('Erro ao salvar ativo B3:', err);
+    res.status(500).json({ error: 'Erro ao salvar ativo B3.' });
+  }
 });
 
-app.get('/api/dividends', (req, res) => {
+app.get('/api/dividends', async (req, res) => {
   const assetId = Number(req.query.assetId);
   const ticker = (req.query.ticker || '').trim().toUpperCase();
-  let query, params;
-  if (ticker) {
-    query = `SELECT d.id, d.assetId, d.comDate, d.paymentDate, d.grossAmount, d.netAmount, d.description, d.createdAt
-             FROM asset_dividends d JOIN b3_assets a ON d.assetId = a.id
-             WHERE a.ticker = ? ORDER BY d.paymentDate DESC`;
-    params = [ticker];
-  } else if (assetId) {
-    query = 'SELECT id, assetId, comDate, paymentDate, grossAmount, netAmount, description, createdAt FROM asset_dividends WHERE assetId = ? ORDER BY paymentDate DESC';
-    params = [assetId];
-  } else {
-    query = 'SELECT id, assetId, comDate, paymentDate, grossAmount, netAmount, description, createdAt FROM asset_dividends ORDER BY paymentDate DESC';
-    params = [];
-  }
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar dividendos:', err);
-      return res.status(500).json({ error: 'Erro ao buscar dividendos.' });
+  try {
+    let result;
+    if (ticker) {
+      result = await pool.query(
+        `SELECT d.id, d.assetid, d.comdate, d.paymentdate, d.grossamount, d.netamount, d.description, d.createdat
+         FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
+         WHERE a.ticker = $1 ORDER BY d.paymentdate DESC`,
+        [ticker]
+      );
+    } else if (assetId) {
+      result = await pool.query(
+        'SELECT id, assetid, comdate, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC',
+        [assetId]
+      );
+    } else {
+      result = await pool.query(
+        'SELECT id, assetid, comdate, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends ORDER BY paymentdate DESC'
+      );
     }
-    res.json(rows);
-  });
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar dividendos:', err);
+    res.status(500).json({ error: 'Erro ao buscar dividendos.' });
+  }
 });
 
-app.post('/api/dividends', (req, res) => {
+app.post('/api/dividends', async (req, res) => {
   const { assetId, paymentDate, grossAmount, netAmount, description } = req.body;
   if (!assetId || !paymentDate || grossAmount == null) {
     return res.status(400).json({ error: 'assetId, paymentDate e grossAmount são obrigatórios.' });
@@ -457,17 +430,17 @@ app.post('/api/dividends', (req, res) => {
     return res.status(400).json({ error: 'Data de pagamento deve estar no formato YYYY-MM-DD.' });
   }
 
-  db.run(
-    'INSERT INTO asset_dividends (assetId, paymentDate, grossAmount, netAmount, description) VALUES (?, ?, ?, ?, ?)',
-    [assetId, paymentDateValue, Number(grossAmount), netAmount != null ? Number(netAmount) : null, description ? String(description).trim() : null],
-    function (err) {
-      if (err) {
-        console.error('Erro ao salvar dividendo:', err);
-        return res.status(500).json({ error: 'Erro ao salvar dividendo.' });
-      }
-      res.json({ id: this.lastID, assetId, paymentDate: paymentDateValue, grossAmount: Number(grossAmount), netAmount: netAmount != null ? Number(netAmount) : null, description });
-    }
-  );
+  try {
+    const result = await pool.query(
+      'INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, assetid, paymentdate, grossamount, netamount, description, createdat',
+      [assetId, paymentDateValue, Number(grossAmount), netAmount != null ? Number(netAmount) : null, description ? String(description).trim() : null]
+    );
+    const d = result.rows[0];
+    res.json({ id: d.id, assetId: d.assetid, paymentDate: d.paymentdate, grossAmount: d.grossamount, netAmount: d.netamount, description: d.description });
+  } catch (err) {
+    console.error('Erro ao salvar dividendo:', err);
+    res.status(500).json({ error: 'Erro ao salvar dividendo.' });
+  }
 });
 
 app.get('/api/quote', async (req, res) => {
@@ -575,45 +548,44 @@ app.get('/admin/ativos', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-ativos.html'));
 });
 
-app.get('/api/admin/assets', (req, res) => {
-  db.all(
-    `SELECT a.id, a.ticker, a.name, a.assetType,
-            (SELECT d.comDate FROM asset_dividends d WHERE d.assetId = a.id ORDER BY d.paymentDate DESC LIMIT 1) AS lastComDate,
-            (SELECT MAX(d.paymentDate) FROM asset_dividends d WHERE d.assetId = a.id) AS lastDividendDate,
-            (SELECT d.grossAmount FROM asset_dividends d WHERE d.assetId = a.id ORDER BY d.paymentDate DESC LIMIT 1) AS lastDividendValue
-     FROM b3_assets a ORDER BY a.assetType, a.ticker`,
-    [],
-    (err, rows) => {
-      if (err) {
-        console.error('Erro ao buscar ativos:', err);
-        return res.status(500).json({ error: 'Erro ao buscar ativos.' });
-      }
-      res.json(rows);
-    }
-  );
-});
-
-app.get('/api/admin/dividends', (req, res) => {
-  const assetId = Number(req.query.assetId);
-  let query, params;
-  if (assetId) {
-    query = 'SELECT id, assetId, paymentDate, grossAmount, netAmount, description, createdAt FROM asset_dividends WHERE assetId = ? ORDER BY paymentDate DESC';
-    params = [assetId];
-  } else {
-    query = 'SELECT id, assetId, paymentDate, grossAmount, netAmount, description, createdAt FROM asset_dividends ORDER BY paymentDate DESC';
-    params = [];
+app.get('/api/admin/assets', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.id, a.ticker, a.name, a.assettype,
+              (SELECT d.comdate FROM asset_dividends d WHERE d.assetid = a.id ORDER BY d.paymentdate DESC LIMIT 1) AS lastcomdate,
+              (SELECT MAX(d.paymentdate) FROM asset_dividends d WHERE d.assetid = a.id) AS lastdividenddate,
+              (SELECT d.grossamount FROM asset_dividends d WHERE d.assetid = a.id ORDER BY d.paymentdate DESC LIMIT 1) AS lastdividendvalue
+       FROM b3_assets a ORDER BY a.assettype, a.ticker`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar ativos:', err);
+    res.status(500).json({ error: 'Erro ao buscar ativos.' });
   }
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar dividendos:', err);
-      return res.status(500).json({ error: 'Erro ao buscar dividendos.' });
-    }
-    res.json(rows);
-  });
 });
 
-app.post('/api/admin/dividends', (req, res) => {
+app.get('/api/admin/dividends', async (req, res) => {
+  const assetId = Number(req.query.assetId);
+  try {
+    let result;
+    if (assetId) {
+      result = await pool.query(
+        'SELECT id, assetid, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC',
+        [assetId]
+      );
+    } else {
+      result = await pool.query(
+        'SELECT id, assetid, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends ORDER BY paymentdate DESC'
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar dividendos:', err);
+    res.status(500).json({ error: 'Erro ao buscar dividendos.' });
+  }
+});
+
+app.post('/api/admin/dividends', async (req, res) => {
   const { assetId, comDate, paymentDate, grossAmount } = req.body;
   if (!assetId || !comDate || !paymentDate || grossAmount == null) {
     return res.status(400).json({ error: 'assetId, comDate, paymentDate e grossAmount são obrigatórios.' });
@@ -626,17 +598,17 @@ app.post('/api/admin/dividends', (req, res) => {
     return res.status(400).json({ error: 'Data pgto deve estar no formato YYYY-MM-DD.' });
   }
 
-  db.run(
-    'INSERT INTO asset_dividends (assetId, comDate, paymentDate, grossAmount) VALUES (?, ?, ?, ?)',
-    [assetId, comDate, paymentDate, Number(grossAmount)],
-    function (err) {
-      if (err) {
-        console.error('Erro ao salvar dividendo:', err);
-        return res.status(500).json({ error: 'Erro ao salvar dividendo.' });
-      }
-      res.json({ id: this.lastID, assetId, comDate, paymentDate, grossAmount: Number(grossAmount) });
-    }
-  );
+  try {
+    const result = await pool.query(
+      'INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount) VALUES ($1, $2, $3, $4) RETURNING id, assetid, comdate, paymentdate, grossamount',
+      [assetId, comDate, paymentDate, Number(grossAmount)]
+    );
+    const d = result.rows[0];
+    res.json({ id: d.id, assetId: d.assetid, comDate: d.comdate, paymentDate: d.paymentdate, grossAmount: d.grossamount });
+  } catch (err) {
+    console.error('Erro ao salvar dividendo:', err);
+    res.status(500).json({ error: 'Erro ao salvar dividendo.' });
+  }
 });
 
 app.get('/api/admin/sync-brapi', async (req, res) => {
@@ -653,17 +625,11 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
     if (!quote || quote.regularMarketPrice == null) {
       return res.status(404).json({ error: 'Ativo não encontrado na Brapi.' });
     }
-    db.run(
-      `UPDATE b3_assets SET name = ?, longName = ?, logoUrl = ?, regularMarketPrice = ? WHERE ticker = ?`,
-      [quote.shortName || ticker, quote.longName || null, quote.logourl || null, String(quote.regularMarketPrice || ''), ticker],
-      function (err) {
-        if (err) {
-          console.error('Erro ao atualizar ativo:', err);
-          return res.status(500).json({ error: 'Erro ao salvar dados da Brapi.' });
-        }
-        res.json({ ticker, name: quote.shortName, longName: quote.longName, price: quote.regularMarketPrice });
-      }
+    await pool.query(
+      `UPDATE b3_assets SET name = $1, longname = $2, logourl = $3, regularmarketprice = $4 WHERE ticker = $5`,
+      [quote.shortName || ticker, quote.longName || null, quote.logourl || null, String(quote.regularMarketPrice || ''), ticker]
     );
+    res.json({ ticker, name: quote.shortName, longName: quote.longName, price: quote.regularMarketPrice });
   } catch (error) {
     console.error('Erro ao sincronizar com Brapi:', error);
     res.status(500).json({ error: 'Erro ao consultar Brapi.' });
@@ -674,7 +640,7 @@ app.use((req, res) => {
   res.redirect('/');
 });
 
-function seedAssetsDatabase() {
+async function seedAssetsDatabase() {
   const assets = [
     ['PETR4', 'Petrobras PN', 'acao'], ['PRIO3', 'PetroRio ON', 'acao'], ['RRRP3', '3R Petroleum ON', 'acao'],
     ['CSAN3', 'Cosan ON', 'acao'], ['VALE3', 'Vale ON', 'acao'], ['CMIN3', 'CSN Mineração ON', 'acao'],
@@ -712,23 +678,32 @@ function seedAssetsDatabase() {
     ['RBRF11', 'RBR Plus FII', 'fii'], ['RBVA11', 'Rio Bravo Vacare FII', 'fii'],
     ['BIDB11', 'Inter Infra FII', 'fii']
   ];
-  const stmt = db.prepare('INSERT OR IGNORE INTO b3_assets (ticker, name, assetType) VALUES (?, ?, ?)');
   let count = 0;
-  assets.forEach(a => { stmt.run(a[0], a[1], a[2], function (err) { if (!err && this.changes > 0) count++; }); });
-  stmt.finalize();
+  for (const a of assets) {
+    const result = await pool.query(
+      'INSERT INTO b3_assets (ticker, name, assettype) VALUES ($1, $2, $3) ON CONFLICT (ticker) DO NOTHING',
+      [a[0], a[1], a[2]]
+    );
+    if (result.rowCount > 0) count++;
+  }
   console.log(`${count} ativos inseridos no banco.`);
 }
 
-app.listen(port, '0.0.0.0', () => {
-  initDb();
-  migratePortfolioTableIfNeeded();
-  migrateDividendTableIfNeeded();
-  migrateB3AssetsTableIfNeeded();
-  migrateUsersTableIfNeeded();
-  seedAssetsDatabase();
-  const ip = require('os').networkInterfaces();
-  const localIp = Object.values(ip).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';
+app.listen(port, '0.0.0.0', async () => {
+  try {
+    await initDb();
+    await migratePortfolioTableIfNeeded();
+    await migrateDividendTableIfNeeded();
+    await migrateB3AssetsTableIfNeeded();
+    await migrateUsersTableIfNeeded();
+    await seedAssetsDatabase();
+  } catch (err) {
+    console.error('Erro na inicialização do banco:', err);
+  }
+
+  const os = require('os');
+  const ip = Object.values(os.networkInterfaces()).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';
   console.log(`Servidor rodando em:`);
   console.log(`  Local:    http://localhost:${port}`);
-  console.log(`  Rede:     http://${localIp}:${port}`);
+  console.log(`  Rede:     http://${ip}:${port}`);
 });
