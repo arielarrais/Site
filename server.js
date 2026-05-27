@@ -8,8 +8,10 @@ const bcrypt = require('bcryptjs');
 const app = express();
 const port = process.env.PORT || 3001;
 
+const DATABASE_URL = process.env.DATABASE_URL;
+console.log('DATABASE_URL:', DATABASE_URL ? 'definida' : 'NÃO DEFINIDA');
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
+  connectionString: DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
 });
 
 app.use(express.json());
