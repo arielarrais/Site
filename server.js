@@ -213,7 +213,7 @@ app.get('/api/portfolio', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      'SELECT id, ticker, quantity, purchaseprice, purchasedat AS purchasdate FROM portfolio_items WHERE userid = $1 ORDER BY purchasedat ASC, id ASC',
+      'SELECT id, ticker, quantity, purchaseprice AS "purchasePrice", purchasedat AS "purchasedAt" FROM portfolio_items WHERE userid = $1 ORDER BY purchasedat ASC, id ASC',
       [userId]
     );
     res.json(rows);
@@ -236,7 +236,7 @@ app.get('/api/portfolio/dividend-returns', async (req, res) => {
             FROM portfolio_items p
             WHERE p.ticker = a.ticker AND p.userid = $1 AND p.purchasedat <= d.comdate
           )
-        ), 0) as totaldividends
+        ), 0) as "totalDividends"
       FROM asset_dividends d
       JOIN b3_assets a ON d.assetid = a.id
       WHERE EXISTS (
@@ -676,7 +676,8 @@ async function seedAssetsDatabase() {
     ['IRDM11', 'Iridium Recebíveis Imobiliários FII', 'fii'], ['RECR11', 'REC Recebíveis Imobiliários FII', 'fii'],
     ['HGJH11', 'CSHG Recebíveis Imobiliários FII', 'fii'], ['AFHI11', 'AF Invest FII', 'fii'],
     ['RBRF11', 'RBR Plus FII', 'fii'], ['RBVA11', 'Rio Bravo Vacare FII', 'fii'],
-    ['BIDB11', 'Inter Infra FII', 'fii']
+    ['BIDB11', 'Inter Infra FII', 'fii'],
+    ['EGAF11', 'Ecoagro I FIAGRO FII', 'fii']
   ];
   let count = 0;
   for (const a of assets) {

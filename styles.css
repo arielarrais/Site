@@ -255,8 +255,9 @@ input:focus {
 }
 
 .metric-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
+  background: #f8f9ff;
+  border: 1px solid #e8e8ff;
+  border-radius: 8px;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -268,21 +269,21 @@ input:focus {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #888;
 }
 
 .metric-value {
   font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: #1a1a2e;
 }
 
 .metric-value.profit {
-  color: #a3e4a3;
+  color: #27ae60;
 }
 
 .metric-value.loss {
-  color: #f8a5a5;
+  color: #e74c3c;
 }
 
 .portfolio-panel {

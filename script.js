@@ -132,7 +132,13 @@ if (isDashboard) {
   async function fetchPortfolioFromServer(userId) {
     if (!userId) return [];
     const data = await req(`/api/portfolio?userId=${encodeURIComponent(userId)}`);
-    return data;
+    return data.map(item => ({
+      id: item.id,
+      ticker: item.ticker,
+      quantity: item.quantity,
+      purchasePrice: item.purchasePrice ?? item.purchaseprice ?? item.purchaseprice,
+      purchaseDate: item.purchaseDate ?? item.purchasedAt ?? item.purchasedat ?? item.purchasdate
+    }));
   }
 
   async function savePortfolioItemToServer(item, userId) {
@@ -232,7 +238,7 @@ if (isDashboard) {
     try {
       const data = await req(`/api/portfolio/dividend-returns?userId=${encodeURIComponent(currentUser.id)}`);
       dividendReturns.clear();
-      data.forEach(d => dividendReturns.set(d.ticker, Number(d.totalDividends)));
+      data.forEach(d => dividendReturns.set(d.ticker, Number(d.totalDividends ?? d.totaldividends ?? 0)));
     } catch (e) { console.warn('Erro ao buscar dividendos:', e.message); }
   }
 
