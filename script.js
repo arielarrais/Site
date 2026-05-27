@@ -109,6 +109,10 @@ if (isDashboard) {
   const searchResult = document.getElementById('search-result');
   const portfolioListElement = document.getElementById('portfolio-list');
   const portfolioSummary = document.getElementById('portfolio-summary');
+  const metricTotalValue = document.getElementById('metric-total-value');
+  const metricInvested = document.getElementById('metric-invested');
+  const metricVariation = document.getElementById('metric-variation');
+  const metricCostDividends = document.getElementById('metric-cost-dividends');
 
   const assetByTicker = new Map();
   const latestPrices = new Map();
@@ -360,7 +364,10 @@ if (isDashboard) {
     if (!portfolio.length) {
       portfolioListElement.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
       portfolioSummary.textContent = 'Adicione ativos ao clicar em "Procurar ativo".';
+      document.getElementById('metrics-row').classList.add('hidden');
       return;
+    } else {
+      document.getElementById('metrics-row').classList.remove('hidden');
     }
 
     const grouped = Object.values(portfolio.reduce((acc, item) => {
@@ -497,6 +504,11 @@ if (isDashboard) {
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
     const totalDivSummary = totalWithDividends - totalInvested;
     portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Custo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    metricTotalValue.textContent = formatCurrency(totalValue);
+    metricInvested.textContent = formatCurrency(totalInvested);
+    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
+    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    metricCostDividends.textContent = formatCurrency(totalWithDividends);
 
     openDropdowns.forEach(t => {
       const el = portfolioListElement.querySelector(`.three-dot-dropdown[data-ticker="${t}"]`);

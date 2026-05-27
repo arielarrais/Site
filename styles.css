@@ -248,6 +248,43 @@ input:focus {
   margin-top: 4px;
 }
 
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.metric-value.profit {
+  color: #a3e4a3;
+}
+
+.metric-value.loss {
+  color: #f8a5a5;
+}
+
 .portfolio-panel {
   margin-top: 12px;
   display: grid;
