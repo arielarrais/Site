@@ -192,20 +192,53 @@ if (isDashboard) {
 
       const wrap = document.createElement('span');
       wrap.className = 'date-br-wrap';
-      input.parentNode.insertBefore(wrap, input);
-      wrap.appendChild(input);
 
-      const display = document.createElement('span');
-      display.className = 'date-br-display';
-      display.textContent = input.value ? isoToDateBR(input.value) : 'DD/MM/AAAA';
-      wrap.appendChild(display);
+      const textInput = document.createElement('input');
+      textInput.type = 'text';
+      textInput.className = 'date-br-text';
+      textInput.placeholder = 'DD/MM/AAAA';
+      textInput.maxLength = 10;
+      textInput.value = input.value ? isoToDateBR(input.value) : '';
 
       input.classList.add('date-br-native');
-      function syncDisplay() {
-        display.textContent = input.value ? isoToDateBR(input.value) : 'DD/MM/AAAA';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'date-br-btn';
+      btn.setAttribute('aria-label', 'Abrir calendário');
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(textInput);
+      wrap.appendChild(input);
+      wrap.appendChild(btn);
+
+      function syncDateToText() {
+        textInput.value = input.value ? isoToDateBR(input.value) : '';
       }
-      input.addEventListener('change', syncDisplay);
-      input.addEventListener('input', syncDisplay);
+
+      textInput.addEventListener('input', () => {
+        let digits = textInput.value.replace(/\D/g, '');
+        let formatted = '';
+        if (digits.length > 0) formatted = digits.substring(0, 2);
+        if (digits.length > 2) formatted += '/' + digits.substring(2, 4);
+        if (digits.length > 4) formatted += '/' + digits.substring(4, 8);
+        textInput.value = formatted;
+        if (digits.length === 8) {
+          const d = digits.substring(0, 2), m = digits.substring(2, 4), y = digits.substring(4, 8);
+          if (+d >= 1 && +d <= 31 && +m >= 1 && +m <= 12) {
+            input.value = `${y}-${m}-${d}`;
+          }
+        }
+      });
+
+      input.addEventListener('change', syncDateToText);
+
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        try { input.showPicker(); } catch { input.focus(); }
+      });
     });
   }
 
