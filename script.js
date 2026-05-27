@@ -206,15 +206,6 @@ if (isDashboard) {
       }
       input.addEventListener('change', syncDisplay);
       input.addEventListener('input', syncDisplay);
-      display.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (typeof input.showPicker === 'function') {
-          input.showPicker();
-        } else {
-          input.focus();
-        }
-      });
-      display.addEventListener('focus', () => input.focus());
     });
   }
 

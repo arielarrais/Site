@@ -312,8 +312,6 @@ input:focus {
   background: #fff;
   font-size: 14px;
   color: #333;
-  cursor: pointer;
-  z-index: 1;
 }
 
 .date-br-display:empty::before {
