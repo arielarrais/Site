@@ -397,19 +397,27 @@ app.get('/api/dividends', async (req, res) => {
     let result;
     if (ticker) {
       result = await pool.query(
-        `SELECT d.id, d.assetid, d.comdate, d.paymentdate, d.grossamount, d.netamount, d.description, d.createdat
+        `SELECT d.id, d.assetid, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
+                d.grossamount AS "grossAmount", d.netamount AS "netAmount",
+                d.description, d.createdat AS "createdAt"
          FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
          WHERE a.ticker = $1 ORDER BY d.paymentdate DESC`,
         [ticker]
       );
     } else if (assetId) {
       result = await pool.query(
-        'SELECT id, assetid, comdate, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC',
+        `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
+                grossamount AS "grossAmount", netamount AS "netAmount",
+                description, createdat AS "createdAt"
+         FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC`,
         [assetId]
       );
     } else {
       result = await pool.query(
-        'SELECT id, assetid, comdate, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends ORDER BY paymentdate DESC'
+        `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
+                grossamount AS "grossAmount", netamount AS "netAmount",
+                description, createdat AS "createdAt"
+         FROM asset_dividends ORDER BY paymentdate DESC`
       );
     }
     res.json(result.rows);
