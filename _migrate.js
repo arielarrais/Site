@@ -2,11 +2,7 @@ const sqlite3 = require('sqlite3');
 const { Client } = require('pg');
 
 const PGCONFIG = {
-  user: 'postgres',
-  password: 'admin',
-  host: 'localhost',
-  port: 5432,
-  database: 'site_db'
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
 };
 
 async function migrate() {
