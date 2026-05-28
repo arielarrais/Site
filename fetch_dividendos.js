@@ -1,21 +1,7 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
-});
-
 const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-// FIIs que funcionam no free tier da Brapi (sem token)
-const BRAPI_FREE_FIIS = ['HGLG11', 'MXRF11'];
-
-async function getAllAssets() {
-  const r = await pool.query(
-    "SELECT id, ticker, name FROM b3_assets ORDER BY ticker"
-  );
-  return r.rows;
-}
 
 async function fetchBrapiDividends() {
   console.log('\n--- Brapi free tier (HGLG11, MXRF11) ---');
@@ -62,7 +48,7 @@ async function fetchYahooDividends(ticker) {
   return entries;
 }
 
-async function saveDividends(assetMap, dividends, source) {
+async function saveDividends(pool, assetMap, dividends) {
   let inserted = 0;
   let skipped = 0;
   for (const div of dividends) {
@@ -105,47 +91,36 @@ async function saveDividends(assetMap, dividends, source) {
   return { inserted, skipped };
 }
 
-async function main() {
-  console.log('Buscando ativos do banco...');
-  const assets = await getAllAssets();
-  console.log(`Total de ativos encontrados: ${assets.length}`);
+async function syncAllDividends(pool) {
+  console.log(`[${new Date().toISOString()}] Sincronizando dividendos...`);
+  const assets = await pool.query("SELECT id, ticker, name FROM b3_assets ORDER BY ticker");
+  console.log(`Total de ativos: ${assets.rows.length}`);
 
   const assetMap = {};
   const allTickers = [];
-  for (const a of assets) {
+  for (const a of assets.rows) {
     assetMap[a.ticker] = a.id;
     allTickers.push(a.ticker);
   }
 
   let totalInserted = 0;
-  let totalSkipped = 0;
-  const processedFiis = [];
-  const errorFiis = [];
-  const brapiFiis = [];
   const yahooFiis = [];
+  const errorFiis = [];
 
-  // Passo 1: Brapi free tier - HGLG11 e MXRF11 (tem data com + data pagto)
-  try {
-    const brapiDivs = await fetchBrapiDividends();
-    if (brapiDivs.length > 0) {
-      const mapped = brapiDivs.map(d => ({
-        symbol: d.symbol,
-        comDate: d.lastDatePrior ? d.lastDatePrior.split(' ')[0] : null,
-        paymentDate: d.paymentDate ? d.paymentDate.split(' ')[0] : null,
-        rate: d.rate
-      }));
-      const { inserted, skipped } = await saveDividends(assetMap, mapped, 'Brapi');
-      totalInserted += inserted;
-      totalSkipped += skipped;
-      brapiFiis.push(...new Set(mapped.map(d => d.symbol.toUpperCase())));
-      console.log(`  Inseridos: ${inserted}, Ignorados: ${skipped}`);
-    }
-  } catch (err) {
-    console.error(`  Erro Brapi: ${err.message}`);
+  const brapiDivs = await fetchBrapiDividends();
+  if (brapiDivs.length > 0) {
+    const mapped = brapiDivs.map(d => ({
+      symbol: d.symbol,
+      comDate: d.lastDatePrior ? d.lastDatePrior.split(' ')[0] : null,
+      paymentDate: d.paymentDate ? d.paymentDate.split(' ')[0] : null,
+      rate: d.rate
+    }));
+    const { inserted, skipped } = await saveDividends(pool, assetMap, mapped);
+    totalInserted += inserted;
+    console.log(`  Brapi: ${inserted} novos, ${skipped} ignorados`);
   }
 
-  // Passo 2: Yahoo Finance para todos os FIIs
-  console.log('\n--- Yahoo Finance (todos os FIIs) ---');
+  console.log('--- Yahoo Finance ---');
   const CONCURRENCY = 3;
   for (let i = 0; i < allTickers.length; i += CONCURRENCY) {
     const batch = allTickers.slice(i, i + CONCURRENCY);
@@ -155,37 +130,34 @@ async function main() {
       const ticker = batch[j];
       const result = results[j];
       if (result.status === 'fulfilled' && result.value.length > 0) {
-        const { inserted, skipped } = await saveDividends(assetMap, result.value, 'Yahoo');
+        const { inserted, skipped } = await saveDividends(pool, assetMap, result.value);
         totalInserted += inserted;
-        totalSkipped += skipped;
         yahooFiis.push(ticker);
-        console.log(`  ${ticker}: ${result.value.length} dividendos (${inserted} novos, ${skipped} existentes)`);
-      } else if (result.status === 'fulfilled' && result.value.length === 0) {
-        console.log(`  ${ticker}: sem dividendos no Yahoo Finance`);
+        console.log(`  ${ticker}: ${result.value.length} proventos (${inserted} novos, ${skipped} existentes)`);
+      } else if (result.status === 'fulfilled') {
         errorFiis.push(ticker);
       } else {
-        console.log(`  ${ticker}: erro - ${result.reason?.message?.slice(0, 100) || 'desconhecido'}`);
         errorFiis.push(ticker);
       }
     }
-    // Pequena pausa para evitar rate limit
     if (i + CONCURRENCY < allTickers.length) {
       await new Promise(r => setTimeout(r, 1000));
     }
   }
 
-  const allProcessed = [...new Set([...brapiFiis, ...yahooFiis])];
-  console.log('\n========== RESUMO ==========');
-  console.log(`Total ativos no banco: ${assets.length}`);
-  console.log(`Tickers com dividendos via Yahoo: ${yahooFiis.length}`);
-  console.log(`Ativos sem dados: ${errorFiis.length}`);
-  console.log(`Total dividendos inseridos: ${totalInserted}`);
-  console.log(`Total registros ignorados: ${totalSkipped}`);
-
-  await pool.end();
+  console.log(`\nResumo: ${totalInserted} novos proventos salvos, ${errorFiis.length} ativos sem dados`);
+  console.log(`[${new Date().toISOString()}] Sincronização concluída.\n`);
 }
 
-main().catch(err => {
-  console.error('Erro fatal:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
+  });
+  syncAllDividends(pool).then(() => pool.end()).catch(err => {
+    console.error('Erro fatal:', err);
+    pool.end();
+    process.exit(1);
+  });
+}
+
+module.exports = { syncAllDividends };

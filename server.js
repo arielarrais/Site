@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const { syncAllDividends } = require('./fetch_dividendos');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -657,6 +658,15 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
   }
 });
 
+app.post('/api/admin/sync-dividends', async (req, res) => {
+  try {
+    res.json({ message: 'Sincronização de dividendos iniciada em segundo plano.' });
+    syncAllDividends(pool).catch(err => console.error('Erro no sync automático:', err));
+  } catch (err) {
+    console.error('Erro ao iniciar sync:', err);
+  }
+});
+
 app.use((req, res) => {
   res.redirect('/');
 });
@@ -722,6 +732,15 @@ app.listen(port, '0.0.0.0', async () => {
   } catch (err) {
     console.error('Erro na inicialização do banco:', err);
   }
+
+  const SYNC_INTERVAL = 7 * 24 * 60 * 60 * 1000;
+  setTimeout(() => {
+    syncAllDividends(pool).catch(err => console.error('Erro no sync inicial:', err));
+  }, 60000);
+  setInterval(() => {
+    syncAllDividends(pool).catch(err => console.error('Erro no sync agendado:', err));
+  }, SYNC_INTERVAL);
+  console.log(`Auto-sync de dividendos agendado a cada ${SYNC_INTERVAL / 86400000} dias.`);
 
   const os = require('os');
   const ip = Object.values(os.networkInterfaces()).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';

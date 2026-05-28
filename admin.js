@@ -210,6 +210,18 @@ if (!isAdmin) {
   document.getElementById('sync-all-button').classList.add('hidden');
 }
 
+document.getElementById('sync-dividends-button').addEventListener('click', async () => {
+  const btn = document.getElementById('sync-dividends-button');
+  btn.textContent = 'Sincronizando...';
+  try {
+    await req('/api/admin/sync-dividends', 'POST');
+    alert('Sincronização de dividendos iniciada! Os novos proventos serão baixados em segundo plano.');
+  } catch (err) {
+    alert('Erro: ' + err.message);
+  }
+  btn.textContent = 'Sync Dividendos';
+});
+
 document.getElementById('sync-all-button').addEventListener('click', async () => {
   const btn = document.getElementById('sync-all-button');
   btn.textContent = 'Sincronizando...';
