@@ -1,5 +1,6 @@
 const API = '/api';
 const authKey = 'site-login-authenticated';
+let dividendChartInstance = null;
 
 function getUser() {
   const stored = localStorage.getItem(authKey);
@@ -303,10 +304,57 @@ async function showDividendHistory(ticker) {
       });
     }
 
+    if (dividendChartInstance) {
+      dividendChartInstance.destroy();
+      dividendChartInstance = null;
+    }
+
     if (!dividends.length) {
       list.innerHTML = '<p class="empty-message">Nenhum dividendo registrado.</p>';
+      document.getElementById('dividend-chart').classList.add('hidden');
     } else {
       renderHistory(dividends);
+      const canvas = document.getElementById('dividend-chart');
+      canvas.classList.remove('hidden');
+      const sorted = [...dividends].sort((a, b) => (a.paymentDate || '').localeCompare(b.paymentDate || ''));
+      const labels = sorted.map(d => formatDateBR(d.paymentDate));
+      const values = sorted.map(d => d.grossAmount != null ? Number(d.grossAmount) : 0);
+      const types = sorted.map(d => d.type || 'dividendo');
+      const isAmort = types.map(t => t === 'amortizacao');
+      dividendChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Dividendo (R$)',
+            data: values,
+            backgroundColor: values.map((_, i) => isAmort[i] ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
+            borderColor: values.map((_, i) => isAmort[i] ? 'rgb(239,68,68)' : 'rgb(34,197,94)'),
+            borderWidth: 1,
+            borderRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `R$ ${ctx.parsed.y.toFixed(2)}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { maxRotation: 45, font: { size: 10 } }
+            },
+            y: {
+              ticks: { callback: v => 'R$' + v.toFixed(2) }
+            }
+          }
+        }
+      });
     }
     document.getElementById('history-modal').classList.remove('hidden');
   } catch (err) {
@@ -316,11 +364,21 @@ async function showDividendHistory(ticker) {
 
 document.getElementById('history-modal-close').addEventListener('click', () => {
   document.getElementById('history-modal').classList.add('hidden');
+  if (dividendChartInstance) {
+    dividendChartInstance.destroy();
+    dividendChartInstance = null;
+    document.getElementById('dividend-chart').classList.add('hidden');
+  }
 });
 
 document.getElementById('history-modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) {
     e.target.classList.add('hidden');
+    if (dividendChartInstance) {
+      dividendChartInstance.destroy();
+      dividendChartInstance = null;
+      document.getElementById('dividend-chart').classList.add('hidden');
+    }
   }
 });
 

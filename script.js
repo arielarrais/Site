@@ -322,13 +322,22 @@ if (isDashboard) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
 
+  let dividendChartInstance = null;
+
   async function showDividendHistory(ticker) {
     try {
       const dividends = await req(`/api/dividends?ticker=${encodeURIComponent(ticker)}`);
       document.getElementById('dividend-modal-ticker').textContent = ticker;
       const list = document.getElementById('dividend-list');
+
+      if (dividendChartInstance) {
+        dividendChartInstance.destroy();
+        dividendChartInstance = null;
+      }
+
       if (!dividends.length) {
         list.innerHTML = '<p class="empty-message">Nenhum dividendo registrado.</p>';
+        document.getElementById('dividend-chart').classList.add('hidden');
       } else {
         let historySort = { key: null, dir: 'asc' };
         function renderHistoryTable(sorted) {
@@ -339,6 +348,7 @@ if (isDashboard) {
                   <th data-sort="comDate">Data COM <span class="sort-arrows"></span></th>
                   <th data-sort="paymentDate">Data pgto <span class="sort-arrows"></span></th>
                   <th data-sort="grossAmount">Valor (R$) <span class="sort-arrows"></span></th>
+                  <th data-sort="type">Tipo <span class="sort-arrows"></span></th>
                 </tr>
               </thead>
               <tbody>
@@ -347,6 +357,7 @@ if (isDashboard) {
                     <td>${formatDateBR(d.comDate)}</td>
                     <td>${formatDateBR(d.paymentDate)}</td>
                     <td>${d.grossAmount != null ? Number(d.grossAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                    <td>${d.type || 'dividendo'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -372,6 +383,48 @@ if (isDashboard) {
           });
         }
         renderHistoryTable(dividends);
+
+        const canvas = document.getElementById('dividend-chart');
+        canvas.classList.remove('hidden');
+        const sorted = [...dividends].sort((a, b) => (a.paymentDate || '').localeCompare(b.paymentDate || ''));
+        const labels = sorted.map(d => formatDateBR(d.paymentDate));
+        const values = sorted.map(d => d.grossAmount != null ? Number(d.grossAmount) : 0);
+        const types = sorted.map(d => d.type || 'dividendo');
+        const isAmort = types.map(t => t === 'amortizacao');
+        dividendChartInstance = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Dividendo (R$)',
+              data: values,
+              backgroundColor: values.map((_, i) => isAmort[i] ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
+              borderColor: values.map((_, i) => isAmort[i] ? 'rgb(239,68,68)' : 'rgb(34,197,94)'),
+              borderWidth: 1,
+              borderRadius: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => `R$ ${ctx.parsed.y.toFixed(2)}`
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { maxRotation: 45, font: { size: 10 } }
+              },
+              y: {
+                ticks: { callback: v => 'R$' + v.toFixed(2) }
+              }
+            }
+          }
+        });
       }
       document.getElementById('dividend-modal').classList.remove('hidden');
     } catch (err) {
@@ -381,11 +434,21 @@ if (isDashboard) {
 
   document.getElementById('dividend-modal-close').addEventListener('click', () => {
     document.getElementById('dividend-modal').classList.add('hidden');
+    if (dividendChartInstance) {
+      dividendChartInstance.destroy();
+      dividendChartInstance = null;
+      document.getElementById('dividend-chart').classList.add('hidden');
+    }
   });
 
   document.getElementById('dividend-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.target.classList.add('hidden');
+      if (dividendChartInstance) {
+        dividendChartInstance.destroy();
+        dividendChartInstance = null;
+        document.getElementById('dividend-chart').classList.add('hidden');
+      }
     }
   });
 

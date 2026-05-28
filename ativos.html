@@ -110,6 +110,7 @@
   <div class="modal-overlay hidden" id="history-modal">
     <div class="modal modal-wide">
       <h2>Histórico de Dividendos - <span id="history-modal-ticker"></span></h2>
+      <canvas id="dividend-chart" style="max-height:260px;margin-bottom:16px"></canvas>
       <div id="history-dividend-list" class="dividend-list"></div>
       <div class="modal-actions">
         <button type="button" id="history-modal-close" class="btn btn-secondary" style="width:auto">Fechar</button>
@@ -117,6 +118,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>
