@@ -112,6 +112,8 @@ if (isDashboard) {
   const metricVariation = document.getElementById('metric-variation');
   const metricCostDividends = document.getElementById('metric-cost-dividends');
 
+  const portfolioSort = { key: null, dir: 'asc' };
+
   const assetByTicker = new Map();
   const latestPrices = new Map();
   const dividendReturns = new Map();
@@ -328,26 +330,48 @@ if (isDashboard) {
       if (!dividends.length) {
         list.innerHTML = '<p class="empty-message">Nenhum dividendo registrado.</p>';
       } else {
-        list.innerHTML = `
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Data COM</th>
-                <th>Data pgto</th>
-                <th>Valor (R$)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${dividends.map(d => `
+        let historySort = { key: null, dir: 'asc' };
+        function renderHistoryTable(sorted) {
+          list.innerHTML = `
+            <table class="admin-table sortable">
+              <thead>
                 <tr>
-                  <td>${formatDateBR(d.comDate)}</td>
-                  <td>${formatDateBR(d.paymentDate)}</td>
-                  <td>${d.grossAmount != null ? Number(d.grossAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                  <th data-sort="comDate">Data COM <span class="sort-arrows"></span></th>
+                  <th data-sort="paymentDate">Data pgto <span class="sort-arrows"></span></th>
+                  <th data-sort="grossAmount">Valor (R$) <span class="sort-arrows"></span></th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `;
+              </thead>
+              <tbody>
+                ${sorted.map(d => `
+                  <tr>
+                    <td>${formatDateBR(d.comDate)}</td>
+                    <td>${formatDateBR(d.paymentDate)}</td>
+                    <td>${d.grossAmount != null ? Number(d.grossAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+          list.querySelectorAll('.sortable thead th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+              const key = th.dataset.sort;
+              historySort.dir = historySort.key === key && historySort.dir === 'asc' ? 'desc' : 'asc';
+              historySort.key = key;
+              list.querySelectorAll('.sortable thead th[data-sort]').forEach(h => {
+                h.querySelector('.sort-arrows').textContent = ' ⇅';
+              });
+              th.querySelector('.sort-arrows').textContent = historySort.dir === 'asc' ? ' ▲' : ' ▼';
+              const sorted = [...dividends].sort((a, b) => {
+                let va = a[key], vb = b[key];
+                if (key === 'grossAmount') { va = va == null ? -Infinity : Number(va); vb = vb == null ? -Infinity : Number(vb); }
+                else { va = (va || '').toString().toLowerCase(); vb = (vb || '').toString().toLowerCase(); }
+                return va < vb ? (historySort.dir === 'asc' ? -1 : 1) : va > vb ? (historySort.dir === 'asc' ? 1 : -1) : 0;
+              });
+              renderHistoryTable(sorted);
+            });
+          });
+        }
+        renderHistoryTable(dividends);
       }
       document.getElementById('dividend-modal').classList.remove('hidden');
     } catch (err) {
@@ -466,23 +490,52 @@ if (isDashboard) {
       return sum + group.totalCost + (dividendReturns.get(group.ticker) || 0);
     }, 0);
 
+    const enriched = grouped.map(g => ({
+      ...g,
+      _currentPrice: getAssetCurrentPrice(g.ticker),
+      _averagePrice: g.totalQuantity ? g.totalCost / g.totalQuantity : 0,
+      _value: getAssetCurrentPrice(g.ticker) * g.totalQuantity,
+      _totalDiv: dividendReturns.get(g.ticker) || 0,
+      _costWithDiv: g.totalCost + (dividendReturns.get(g.ticker) || 0),
+      _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
+    }));
+
+    if (portfolioSort.key) {
+      enriched.sort((a, b) => {
+        let va = a[portfolioSort.key], vb = b[portfolioSort.key];
+        if (va == null) va = portfolioSort.dir === 'asc' ? Infinity : -Infinity;
+        if (vb == null) vb = portfolioSort.dir === 'asc' ? Infinity : -Infinity;
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return portfolioSort.dir === 'asc' ? -1 : 1;
+        if (va > vb) return portfolioSort.dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    function ps(key, label) {
+      const isActive = portfolioSort.key === key;
+      const arrow = isActive ? (portfolioSort.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
+      return `<span class="psort" data-sort="${key}">${label} <span class="sort-arrows">${arrow}</span></span>`;
+    }
+
     const gridHeaders = `
       <div class="grid-row grid-header">
-        <div class="grid-cell">Ativo</div>
-        <div class="grid-cell">Lançamentos</div>
-        <div class="grid-cell">Quantidade</div>
-        <div class="grid-cell">Preço atual</div>
-        <div class="grid-cell">Preço médio</div>
-        <div class="grid-cell">Custo total</div>
-        <div class="grid-cell">Saldo</div>
-        <div class="grid-cell">Dividendos</div>
-        <div class="grid-cell">Total c/ Dividendos</div>
-        <div class="grid-cell">Resultado</div>
+        <div class="grid-cell">${ps('ticker', 'Ativo')}</div>
+        <div class="grid-cell">${ps('items', 'Lançamentos')}</div>
+        <div class="grid-cell">${ps('totalQuantity', 'Quantidade')}</div>
+        <div class="grid-cell">${ps('_currentPrice', 'Preço atual')}</div>
+        <div class="grid-cell">${ps('_averagePrice', 'Preço médio')}</div>
+        <div class="grid-cell">${ps('totalCost', 'Custo total')}</div>
+        <div class="grid-cell">${ps('_value', 'Saldo')}</div>
+        <div class="grid-cell">${ps('_totalDiv', 'Dividendos')}</div>
+        <div class="grid-cell">${ps('_costWithDiv', 'Total c/ Dividendos')}</div>
+        <div class="grid-cell">${ps('_profitLoss', 'Resultado')}</div>
         <div class="grid-cell">Ações</div>
       </div>
     `;
 
-    const gridRows = grouped.map((group) => {
+    const gridRows = enriched.map((group) => {
       const asset = assetByTicker.get(group.ticker);
       const currentPrice = getAssetCurrentPrice(group.ticker);
       const value = currentPrice * group.totalQuantity;
@@ -623,6 +676,19 @@ if (isDashboard) {
       if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
     });
     enhanceDateInputs();
+
+    portfolioListElement.querySelectorAll('.grid-header .psort').forEach(el => {
+      el.addEventListener('click', () => {
+        const key = el.dataset.sort;
+        if (portfolioSort.key === key) {
+          portfolioSort.dir = portfolioSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          portfolioSort.key = key;
+          portfolioSort.dir = 'asc';
+        }
+        renderPortfolio();
+      });
+    });
   }
 
   async function addAssetToPortfolio(ticker, quantity, purchasePrice, purchaseDate) {
