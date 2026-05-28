@@ -10,9 +10,9 @@ const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (
 // FIIs que funcionam no free tier da Brapi (sem token)
 const BRAPI_FREE_FIIS = ['HGLG11', 'MXRF11'];
 
-async function getFiis() {
+async function getAllAssets() {
   const r = await pool.query(
-    "SELECT id, ticker, name FROM b3_assets WHERE assettype = 'fii' ORDER BY ticker"
+    "SELECT id, ticker, name FROM b3_assets ORDER BY ticker"
   );
   return r.rows;
 }
@@ -106,15 +106,15 @@ async function saveDividends(assetMap, dividends, source) {
 }
 
 async function main() {
-  console.log('Buscando FIIs do banco...');
-  const fiis = await getFiis();
-  console.log(`Total de FIIs encontrados: ${fiis.length}`);
+  console.log('Buscando ativos do banco...');
+  const assets = await getAllAssets();
+  console.log(`Total de ativos encontrados: ${assets.length}`);
 
   const assetMap = {};
   const allTickers = [];
-  for (const f of fiis) {
-    assetMap[f.ticker] = f.id;
-    allTickers.push(f.ticker);
+  for (const a of assets) {
+    assetMap[a.ticker] = a.id;
+    allTickers.push(a.ticker);
   }
 
   let totalInserted = 0;
@@ -174,29 +174,13 @@ async function main() {
     }
   }
 
-  // Resumo
   const allProcessed = [...new Set([...brapiFiis, ...yahooFiis])];
   console.log('\n========== RESUMO ==========');
-  console.log(`Total FIIs no banco: ${fiis.length}`);
-  console.log(`FIIs com dividendos salvos: ${allProcessed.length}`);
-  console.log(`FIIs sem dados: ${errorFiis.length}`);
+  console.log(`Total ativos no banco: ${assets.length}`);
+  console.log(`Tickers com dividendos via Yahoo: ${yahooFiis.length}`);
+  console.log(`Ativos sem dados: ${errorFiis.length}`);
   console.log(`Total dividendos inseridos: ${totalInserted}`);
   console.log(`Total registros ignorados: ${totalSkipped}`);
-
-  if (allProcessed.length > 0) {
-    console.log('\n========== FIIs COM DADOS ==========');
-    for (const ticker of allProcessed.sort()) {
-      const f = fiis.find(f => f.ticker === ticker);
-      console.log(`  ${ticker} - ${f ? f.name : ''}`);
-    }
-  }
-
-  if (errorFiis.length > 0) {
-    console.log('\n========== FIIs SEM DADOS ==========');
-    for (const ticker of [...new Set(errorFiis)].sort()) {
-      console.log(`  ${ticker}`);
-    }
-  }
 
   await pool.end();
 }
