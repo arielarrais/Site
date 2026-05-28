@@ -87,13 +87,22 @@ async function initDb() {
 }
 
 async function migrateDividendTableIfNeeded() {
-  const { rows } = await pool.query(`
+  const checkComdate = await pool.query(`
     SELECT column_name FROM information_schema.columns
     WHERE table_name = 'asset_dividends' AND column_name = 'comdate'
   `);
-  if (rows.length === 0) {
+  if (checkComdate.rows.length === 0) {
     await pool.query('ALTER TABLE asset_dividends ADD COLUMN comdate TEXT');
     console.log('Coluna comdate adicionada em asset_dividends.');
+  }
+
+  const checkType = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'asset_dividends' AND column_name = 'type'
+  `);
+  if (checkType.rows.length === 0) {
+    await pool.query("ALTER TABLE asset_dividends ADD COLUMN type TEXT NOT NULL DEFAULT 'dividendo'");
+    console.log('Coluna type adicionada em asset_dividends.');
   }
 }
 
@@ -109,6 +118,10 @@ async function migrateB3AssetsTableIfNeeded() {
       await pool.query(`ALTER TABLE b3_assets ADD COLUMN ${col} TEXT`);
       console.log(`Coluna ${col} adicionada em b3_assets.`);
     }
+  }
+  if (!cols.includes('fiitype')) {
+    await pool.query("ALTER TABLE b3_assets ADD COLUMN fiitype TEXT");
+    console.log('Coluna fiitype adicionada em b3_assets.');
   }
 }
 
@@ -399,7 +412,7 @@ app.get('/api/dividends', async (req, res) => {
       result = await pool.query(
         `SELECT d.id, d.assetid, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
                 d.grossamount AS "grossAmount", d.netamount AS "netAmount",
-                d.description, d.createdat AS "createdAt"
+                d.description, d.type, d.createdat AS "createdAt"
          FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
          WHERE a.ticker = $1 ORDER BY d.paymentdate DESC`,
         [ticker]
@@ -408,7 +421,7 @@ app.get('/api/dividends', async (req, res) => {
       result = await pool.query(
         `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
                 grossamount AS "grossAmount", netamount AS "netAmount",
-                description, createdat AS "createdAt"
+                description, type, createdat AS "createdAt"
          FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC`,
         [assetId]
       );
@@ -416,7 +429,7 @@ app.get('/api/dividends', async (req, res) => {
       result = await pool.query(
         `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
                 grossamount AS "grossAmount", netamount AS "netAmount",
-                description, createdat AS "createdAt"
+                description, type, createdat AS "createdAt"
          FROM asset_dividends ORDER BY paymentdate DESC`
       );
     }
@@ -428,7 +441,7 @@ app.get('/api/dividends', async (req, res) => {
 });
 
 app.post('/api/dividends', async (req, res) => {
-  const { assetId, paymentDate, grossAmount, netAmount, description } = req.body;
+  const { assetId, paymentDate, grossAmount, netAmount, description, type } = req.body;
   if (!assetId || !paymentDate || grossAmount == null) {
     return res.status(400).json({ error: 'assetId, paymentDate e grossAmount são obrigatórios.' });
   }
@@ -440,11 +453,11 @@ app.post('/api/dividends', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, assetid, paymentdate, grossamount, netamount, description, createdat',
-      [assetId, paymentDateValue, Number(grossAmount), netAmount != null ? Number(netAmount) : null, description ? String(description).trim() : null]
+      'INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description, type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, assetid, paymentdate, grossamount, netamount, description, type, createdat',
+      [assetId, paymentDateValue, Number(grossAmount), netAmount != null ? Number(netAmount) : null, description ? String(description).trim() : null, type || 'dividendo']
     );
     const d = result.rows[0];
-    res.json({ id: d.id, assetId: d.assetid, paymentDate: d.paymentdate, grossAmount: d.grossamount, netAmount: d.netamount, description: d.description });
+    res.json({ id: d.id, assetId: d.assetid, paymentDate: d.paymentdate, grossAmount: d.grossamount, netAmount: d.netamount, description: d.description, type: d.type });
   } catch (err) {
     console.error('Erro ao salvar dividendo:', err);
     res.status(500).json({ error: 'Erro ao salvar dividendo.' });
@@ -559,7 +572,7 @@ app.get('/ativos', (req, res) => {
 app.get('/api/admin/assets', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.ticker, a.name, a.assettype,
+      `SELECT a.id, a.ticker, a.name, a.assettype, a.fiitype,
               (SELECT d.comdate FROM asset_dividends d WHERE d.assetid = a.id ORDER BY d.paymentdate DESC LIMIT 1) AS lastcomdate,
               (SELECT MAX(d.paymentdate) FROM asset_dividends d WHERE d.assetid = a.id) AS lastdividenddate,
               (SELECT d.grossamount FROM asset_dividends d WHERE d.assetid = a.id ORDER BY d.paymentdate DESC LIMIT 1) AS lastdividendvalue
@@ -578,12 +591,12 @@ app.get('/api/admin/dividends', async (req, res) => {
     let result;
     if (assetId) {
       result = await pool.query(
-        'SELECT id, assetid, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC',
+        'SELECT id, assetid, paymentdate, grossamount, netamount, description, type, createdat FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC',
         [assetId]
       );
     } else {
       result = await pool.query(
-        'SELECT id, assetid, paymentdate, grossamount, netamount, description, createdat FROM asset_dividends ORDER BY paymentdate DESC'
+        'SELECT id, assetid, paymentdate, grossamount, netamount, description, type, createdat FROM asset_dividends ORDER BY paymentdate DESC'
       );
     }
     res.json(result.rows);
@@ -594,7 +607,7 @@ app.get('/api/admin/dividends', async (req, res) => {
 });
 
 app.post('/api/admin/dividends', async (req, res) => {
-  const { assetId, comDate, paymentDate, grossAmount } = req.body;
+  const { assetId, comDate, paymentDate, grossAmount, type } = req.body;
   if (!assetId || !comDate || !paymentDate || grossAmount == null) {
     return res.status(400).json({ error: 'assetId, comDate, paymentDate e grossAmount são obrigatórios.' });
   }
@@ -608,11 +621,11 @@ app.post('/api/admin/dividends', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount) VALUES ($1, $2, $3, $4) RETURNING id, assetid, comdate, paymentdate, grossamount',
-      [assetId, comDate, paymentDate, Number(grossAmount)]
+      'INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, type) VALUES ($1, $2, $3, $4, $5) RETURNING id, assetid, comdate, paymentdate, grossamount, type',
+      [assetId, comDate, paymentDate, Number(grossAmount), type || 'dividendo']
     );
     const d = result.rows[0];
-    res.json({ id: d.id, assetId: d.assetid, comDate: d.comdate, paymentDate: d.paymentdate, grossAmount: d.grossamount });
+    res.json({ id: d.id, assetId: d.assetid, comDate: d.comdate, paymentDate: d.paymentdate, grossAmount: d.grossamount, type: d.type });
   } catch (err) {
     console.error('Erro ao salvar dividendo:', err);
     res.status(500).json({ error: 'Erro ao salvar dividendo.' });

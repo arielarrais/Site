@@ -57,22 +57,74 @@ let selectedAssetId = null;
 
 const isAdmin = currentUser && currentUser.username === 'admin';
 
+const sortState = { acoes: { key: null, dir: 'asc' }, fiis: { key: null, dir: 'asc' } };
+
 async function loadAssets() {
   try {
     const assets = await req('/api/admin/assets');
-    const acoes = assets.filter(a => a.assettype === 'acao');
-    const fiis = assets.filter(a => a.assettype === 'fii');
+    const acoes = filterAndSort(assets.filter(a => a.assettype === 'acao'), 'acoes');
+    const fiis = filterAndSort(assets.filter(a => a.assettype === 'fii'), 'fiis');
     renderTable('acoes-tbody', acoes);
     renderTable('fiis-tbody', fiis);
+    updateSortIndicators('acoes-table');
+    updateSortIndicators('fiis-table');
   } catch (err) {
     alert('Erro ao carregar ativos: ' + err.message);
   }
 }
 
+function filterAndSort(items, tableKey) {
+  const st = sortState[tableKey];
+  if (!st.key) return items;
+  const sorted = [...items].sort((a, b) => {
+    let va = a[st.key], vb = b[st.key];
+    if (st.key === 'lastdividendvalue') {
+      va = va == null ? -Infinity : Number(va);
+      vb = vb == null ? -Infinity : Number(vb);
+    } else {
+      va = (va || '').toString().toLowerCase();
+      vb = (vb || '').toString().toLowerCase();
+    }
+    if (va < vb) return st.dir === 'asc' ? -1 : 1;
+    if (va > vb) return st.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return sorted;
+}
+
+function updateSortIndicators(tableId) {
+  document.querySelectorAll(`#${tableId} thead th[data-sort]`).forEach(th => {
+    const arrows = th.querySelector('.sort-arrows');
+    const key = th.dataset.sort;
+    const tableKey = tableId === 'acoes-table' ? 'acoes' : 'fiis';
+    const st = sortState[tableKey];
+    arrows.textContent = key === st.key ? (st.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
+  });
+}
+
+document.querySelectorAll('.sortable thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const table = th.closest('table');
+    const tableId = table.id;
+    const tableKey = tableId === 'acoes-table' ? 'acoes' : 'fiis';
+    const st = sortState[tableKey];
+    const key = th.dataset.sort;
+    if (st.key === key) {
+      st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      st.key = key;
+      st.dir = 'asc';
+    }
+    loadAssets();
+  });
+});
+
 function renderTable(tbodyId, assets) {
+  const isFii = tbodyId === 'fiis-tbody';
   const tbody = document.getElementById(tbodyId);
+  const colspan = isFii ? 7 : 6;
   if (!assets.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-message">Nenhum ativo encontrado.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="empty-message">Nenhum ativo encontrado.</td></tr>`;
     return;
   }
   tbody.innerHTML = assets.map(a => {
@@ -83,10 +135,12 @@ function renderTable(tbodyId, assets) {
         </button>
         <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar com Brapi">⟳</button>`
       : '';
+    const fiitype = a.fiitype ? a.fiitype.charAt(0).toUpperCase() + a.fiitype.slice(1) : '—';
     return `
     <tr>
       <td><strong><a href="#" class="ticker-link" data-ticker="${a.ticker}">${a.ticker}</a></strong></td>
       <td>${a.name}</td>
+      ${isFii ? `<td>${fiitype}</td>` : ''}
       <td>${formatDateBR(a.lastcomdate)}</td>
       <td>${formatDateBR(a.lastdividenddate)}</td>
       <td>${formatCurrency(a.lastdividendvalue)}</td>
@@ -139,6 +193,7 @@ document.getElementById('dividend-form').addEventListener('submit', async (e) =>
     comDate: document.getElementById('div-com-date').value,
     paymentDate: document.getElementById('div-payment-date').value,
     grossAmount: Number(document.getElementById('div-gross-amount').value),
+    type: document.getElementById('div-type').value,
   };
   try {
     await req('/api/admin/dividends', 'POST', payload);
@@ -178,29 +233,67 @@ async function showDividendHistory(ticker) {
     const dividends = await req(`/api/dividends?ticker=${encodeURIComponent(ticker)}`);
     document.getElementById('history-modal-ticker').textContent = ticker;
     const list = document.getElementById('history-dividend-list');
-    if (!dividends.length) {
-      list.innerHTML = '<p class="empty-message">Nenhum dividendo registrado.</p>';
-    } else {
+
+    function renderHistory(sorted) {
       list.innerHTML = `
-        <table class="admin-table">
+        <table class="admin-table sortable">
           <thead>
             <tr>
-              <th>Data COM</th>
-              <th>Data pgto</th>
-              <th>Valor (R$)</th>
+              <th data-sort="comDate">Data COM <span class="sort-arrows"></span></th>
+              <th data-sort="paymentDate">Data pgto <span class="sort-arrows"></span></th>
+              <th data-sort="grossAmount">Valor (R$) <span class="sort-arrows"></span></th>
+              <th data-sort="type">Tipo <span class="sort-arrows"></span></th>
             </tr>
           </thead>
           <tbody>
-            ${dividends.map(d => `
+            ${sorted.map(d => `
               <tr>
                 <td>${formatDateBR(d.comDate)}</td>
                 <td>${formatDateBR(d.paymentDate)}</td>
                 <td>${d.grossAmount != null ? Number(d.grossAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                <td>${d.type || 'dividendo'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       `;
+
+      document.querySelectorAll('#history-dividend-list .sortable thead th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.sort;
+          const currentDir = th.classList.contains('sort-asc') ? 'asc' : th.classList.contains('sort-desc') ? 'desc' : null;
+          document.querySelectorAll('#history-dividend-list .sortable thead th[data-sort]').forEach(h => {
+            h.classList.remove('sort-asc', 'sort-desc');
+            const arrows = h.querySelector('.sort-arrows');
+            arrows.textContent = ' ⇅';
+          });
+          const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+          th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
+          const arrows = th.querySelector('.sort-arrows');
+          arrows.textContent = newDir === 'asc' ? ' ▲' : ' ▼';
+
+          const sorted = [...dividends].sort((a, b) => {
+            let va = a[key], vb = b[key];
+            if (key === 'grossAmount') {
+              va = va == null ? -Infinity : Number(va);
+              vb = vb == null ? -Infinity : Number(vb);
+            } else {
+              va = (va || '').toString().toLowerCase();
+              vb = (vb || '').toString().toLowerCase();
+            }
+            if (va < vb) return newDir === 'asc' ? -1 : 1;
+            if (va > vb) return newDir === 'asc' ? 1 : -1;
+            return 0;
+          });
+          renderHistory(sorted);
+        });
+      });
+    }
+
+    if (!dividends.length) {
+      list.innerHTML = '<p class="empty-message">Nenhum dividendo registrado.</p>';
+    } else {
+      renderHistory(dividends);
     }
     document.getElementById('history-modal').classList.remove('hidden');
   } catch (err) {

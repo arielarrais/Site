@@ -96,9 +96,9 @@ async function saveDividends(assetMap, dividends, source) {
     }
 
     await pool.query(
-      `INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description, comdate)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [assetId, paymentDate || comDate, grossAmount, grossAmount, 'Dividendo', comDate]
+      `INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description, comdate, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [assetId, paymentDate || comDate, grossAmount, grossAmount, 'Dividendo', comDate, 'dividendo']
     );
     inserted++;
   }

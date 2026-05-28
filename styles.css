@@ -753,6 +753,25 @@ input:focus {
   border-bottom: 2px solid #d0d5f0;
 }
 
+.sortable thead th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable thead th[data-sort]:hover {
+  background: #e4e7ff;
+}
+
+.sort-arrows {
+  font-size: 11px;
+  color: #999;
+}
+
+.sort-asc .sort-arrows,
+.sort-desc .sort-arrows {
+  color: #333;
+}
+
 .admin-table td {
   padding: 10px 8px;
   border-bottom: 1px solid #e8e8ff;
