@@ -208,6 +208,7 @@ document.getElementById('dividend-form').addEventListener('submit', async (e) =>
 
 if (!isAdmin) {
   document.getElementById('sync-all-button').classList.add('hidden');
+  document.getElementById('sync-dividends-button').classList.add('hidden');
 }
 
 document.getElementById('sync-dividends-button').addEventListener('click', async () => {
