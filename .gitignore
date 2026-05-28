@@ -2,5 +2,6 @@ node_modules/
 database.sqlite
 .env
 _check.js
+_migrar_prod.js
 npm-debug.log*
 .DS_Store

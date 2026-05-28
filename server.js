@@ -552,8 +552,8 @@ app.get('/api/quotes', async (req, res) => {
 });
 
 // ===================== ADMIN ROUTES =====================
-app.get('/admin/ativos', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin-ativos.html'));
+app.get('/ativos', (req, res) => {
+  res.sendFile(path.join(__dirname, 'ativos.html'));
 });
 
 app.get('/api/admin/assets', async (req, res) => {

@@ -40,7 +40,7 @@ async function req(url, method = 'GET', body = null) {
 }
 
 let currentUser = getUser();
-if (!currentUser || currentUser.username !== 'admin') {
+if (!currentUser) {
   window.location.href = '/';
 }
 
@@ -55,11 +55,13 @@ document.getElementById('dashboard-button').addEventListener('click', () => {
 
 let selectedAssetId = null;
 
+const isAdmin = currentUser && currentUser.username === 'admin';
+
 async function loadAssets() {
   try {
     const assets = await req('/api/admin/assets');
-    const acoes = assets.filter(a => a.assetType === 'acao');
-    const fiis = assets.filter(a => a.assetType === 'fii');
+    const acoes = assets.filter(a => a.assettype === 'acao');
+    const fiis = assets.filter(a => a.assettype === 'fii');
     renderTable('acoes-tbody', acoes);
     renderTable('fiis-tbody', fiis);
   } catch (err) {
@@ -73,21 +75,24 @@ function renderTable(tbodyId, assets) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-message">Nenhum ativo encontrado.</td></tr>';
     return;
   }
-  tbody.innerHTML = assets.map(a => `
-    <tr>
-      <td><strong><a href="#" class="ticker-link" data-ticker="${a.ticker}">${a.ticker}</a></strong></td>
-      <td>${a.name}</td>
-      <td>${formatDateBR(a.lastComDate)}</td>
-      <td>${formatDateBR(a.lastDividendDate)}</td>
-      <td>${formatCurrency(a.lastDividendValue)}</td>
-      <td>
+  tbody.innerHTML = assets.map(a => {
+    const actions = isAdmin
+      ? `
         <button class="btn-register-dividend" data-id="${a.id}" data-ticker="${a.ticker}" data-name="${a.name}">
           + Dividendo
         </button>
-        <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar com Brapi">⟳</button>
-      </td>
-    </tr>
-  `).join('');
+        <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar com Brapi">⟳</button>`
+      : '';
+    return `
+    <tr>
+      <td><strong><a href="#" class="ticker-link" data-ticker="${a.ticker}">${a.ticker}</a></strong></td>
+      <td>${a.name}</td>
+      <td>${formatDateBR(a.lastcomdate)}</td>
+      <td>${formatDateBR(a.lastdividenddate)}</td>
+      <td>${formatCurrency(a.lastdividendvalue)}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
 }
 
 document.getElementById('acoes-tbody').addEventListener('click', onTableClick);
@@ -145,6 +150,10 @@ document.getElementById('dividend-form').addEventListener('submit', async (e) =>
     alert('Erro: ' + err.message);
   }
 });
+
+if (!isAdmin) {
+  document.getElementById('sync-all-button').classList.add('hidden');
+}
 
 document.getElementById('sync-all-button').addEventListener('click', async () => {
   const btn = document.getElementById('sync-all-button');

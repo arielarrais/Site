@@ -95,13 +95,11 @@ if (isDashboard) {
     window.location.href = '/';
   }
 
-  if (currentUser.username === 'admin') {
-    const adminBtn = document.getElementById('admin-button');
-    adminBtn.classList.remove('hidden');
-    adminBtn.addEventListener('click', () => {
-      window.location.href = '/admin/ativos';
-    });
-  }
+  const adminBtn = document.getElementById('admin-button');
+  adminBtn.classList.remove('hidden');
+  adminBtn.addEventListener('click', () => {
+    window.location.href = '/ativos';
+  });
 
   const portfolioPanel = document.getElementById('portfolio-panel');
   const assetSearchForm = document.getElementById('asset-search-form');
