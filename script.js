@@ -670,8 +670,8 @@ if (isDashboard) {
     const gridHeaders = `
       <div class="grid-row grid-header">
         <div class="grid-cell">${ps('ticker', 'Ativo')}</div>
-        <div class="grid-cell">${ps('items', 'Lançamentos')}</div>
-        <div class="grid-cell">${ps('totalQuantity', 'Quantidade')}</div>
+        <div class="grid-cell">${ps('items', 'Lanç.')}</div>
+        <div class="grid-cell">${ps('totalQuantity', 'Qtd.')}</div>
         <div class="grid-cell">${ps('_currentPrice', 'Preço atual')}</div>
         <div class="grid-cell">${ps('_averagePrice', 'Preço médio')}</div>
         <div class="grid-cell">${ps('totalCost', 'Custo total')}</div>

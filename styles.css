@@ -446,7 +446,7 @@ input:focus {
 
 .grid-row {
   display: grid;
-  grid-template-columns: 65px 110px 100px 90px 90px 100px 100px 100px 100px 100px 100px;
+  grid-template-columns: 65px 55px 65px 90px 90px 95px 95px 95px 105px 95px 120px auto;
   column-gap: 2px;
   border-bottom: 1px solid #e8e8ff;
 }
