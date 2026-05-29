@@ -9,9 +9,12 @@ const { syncAllDividends } = require('./fetch_dividendos');
 const app = express();
 const port = process.env.PORT || 3001;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/site_db'
-});
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error('ERRO: DATABASE_URL não definida. Configure a variável de ambiente.');
+  process.exit(1);
+}
+const pool = new Pool({ connectionString: databaseUrl });
 
 app.use(express.json());
 
@@ -721,7 +724,7 @@ async function seedAssetsDatabase() {
   console.log(`${count} ativos inseridos no banco.`);
 }
 
-app.listen(port, '0.0.0.0', async () => {
+app.listen(port, '127.0.0.1', async () => {
   try {
     await initDb();
     await migratePortfolioTableIfNeeded();
