@@ -327,9 +327,9 @@ if (isDashboard) {
       const value = currentPrice * group.totalQuantity;
       const cost = group.totalCost;
       const totalDiv = dividendReturns.get(group.ticker) || 0;
-      const costWithDiv = cost + totalDiv;
       const profitLoss = value - cost;
       const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
+      const costWithDiv = value + totalDiv;
       const cells = row.querySelectorAll('.grid-cell');
 
       totalValue += value;
@@ -371,9 +371,9 @@ if (isDashboard) {
       }
     }
 
-    const totalWithDividends = grouped.reduce((sum, g) => sum + g.totalCost + (dividendReturns.get(g.ticker) || 0), 0);
+    const totalWithDividends = totalValue + grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
-    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Custo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
     metricTotalValue.textContent = formatCurrency(totalValue);
     metricInvested.textContent = formatCurrency(totalInvested);
     metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
@@ -625,7 +625,9 @@ if (isDashboard) {
     }, 0);
     const totalInvested = grouped.reduce((sum, group) => sum + group.totalCost, 0);
     const totalWithDividends = grouped.reduce((sum, group) => {
-      return sum + group.totalCost + (dividendReturns.get(group.ticker) || 0);
+      const price = getAssetCurrentPrice(group.ticker);
+      const val = price * group.totalQuantity;
+      return sum + val + (dividendReturns.get(group.ticker) || 0);
     }, 0);
 
     const enriched = grouped.map(g => ({
@@ -634,7 +636,7 @@ if (isDashboard) {
       _averagePrice: g.totalQuantity ? g.totalCost / g.totalQuantity : 0,
       _value: getAssetCurrentPrice(g.ticker) * g.totalQuantity,
       _totalDiv: dividendReturns.get(g.ticker) || 0,
-      _costWithDiv: g.totalCost + (dividendReturns.get(g.ticker) || 0),
+      _costWithDiv: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0),
       _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
     }));
 
@@ -679,7 +681,7 @@ if (isDashboard) {
       const value = currentPrice * group.totalQuantity;
       const cost = group.totalCost;
       const totalDiv = dividendReturns.get(group.ticker) || 0;
-      const costWithDiv = cost + totalDiv;
+      const costWithDiv = value + totalDiv;
       const profitLoss = value - cost;
       const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
 
@@ -772,7 +774,7 @@ if (isDashboard) {
 
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
     const totalDivSummary = totalWithDividends - totalInvested;
-    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Custo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
     metricTotalValue.textContent = formatCurrency(totalValue);
     metricInvested.textContent = formatCurrency(totalInvested);
     metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
