@@ -672,14 +672,14 @@ if (isDashboard) {
         <div class="grid-cell">${ps('ticker', 'Ativo')}</div>
         <div class="grid-cell">${ps('items', 'Lanç.')}</div>
         <div class="grid-cell">${ps('totalQuantity', 'Qtd.')}</div>
-        <div class="grid-cell">${ps('_currentPrice', 'Preço atual')}</div>
-        <div class="grid-cell">${ps('_averagePrice', 'Preço médio')}</div>
-        <div class="grid-cell">${ps('totalCost', 'Custo total')}</div>
+        <div class="grid-cell">${ps('_currentPrice', 'Pr. atual')}</div>
+        <div class="grid-cell">${ps('_averagePrice', 'Pr. médio')}</div>
+        <div class="grid-cell">${ps('totalCost', 'Custo')}</div>
         <div class="grid-cell">${ps('_value', 'Saldo')}</div>
-        <div class="grid-cell">${ps('_totalDiv', 'Dividendos')}</div>
-        <div class="grid-cell">${ps('_costWithDiv', 'Total c/ Dividendos')}</div>
-        <div class="grid-cell">${ps('_profitLoss', 'Resultado')}</div>
-        <div class="grid-cell">${ps('_rentabilidade', 'Rentab. c/ Dividendos')}</div>
+        <div class="grid-cell">${ps('_totalDiv', 'Divid.')}</div>
+        <div class="grid-cell">${ps('_costWithDiv', 'Total c/ Div.')}</div>
+        <div class="grid-cell">${ps('_profitLoss', 'Result.')}</div>
+        <div class="grid-cell">${ps('_rentabilidade', 'Rent. c/ Div.')}</div>
         <div class="grid-cell">Ações</div>
       </div>
     `;
