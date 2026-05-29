@@ -339,6 +339,7 @@ if (isDashboard) {
         cells[3].textContent = currentPrice ? formatCurrency(currentPrice) : '—';
         cells[4].textContent = formatCurrency(averagePrice);
         cells[6].textContent = formatCurrency(value);
+        cells[7].textContent = formatCurrency(totalDiv);
         cells[8].textContent = formatCurrency(costWithDiv);
         cells[9].textContent = formatCurrency(profitLoss);
         cells[9].className = 'grid-cell ' + (profitLoss >= 0 ? 'profit' : 'loss');
@@ -835,9 +836,9 @@ if (isDashboard) {
     const saved = await savePortfolioItemToServer(item, currentUser.id);
     const newPortfolio = [...existingPortfolio, saved];
     savePortfolio(newPortfolio);
+    await fetchDividendReturns();
     renderPortfolio();
     refreshPortfolioPrices();
-    fetchDividendReturns();
     alert(`${ticker} cadastrado na carteira com ${quantity} unidade(s) a ${formatCurrency(purchasePrice)}.`);
   }
 
@@ -848,8 +849,8 @@ if (isDashboard) {
     }
     const portfolio = getPortfolio().filter((item) => item.id !== numericId);
     savePortfolio(portfolio);
+    await fetchDividendReturns();
     renderPortfolio();
-    fetchDividendReturns();
   }
 
   async function updateAssetInPortfolio(id, quantity, purchasePrice, purchaseDate) {
@@ -862,14 +863,14 @@ if (isDashboard) {
       await updatePortfolioItemInServer(updated, currentUser.id);
       portfolio[idx] = updated;
       savePortfolio(portfolio);
+      await fetchDividendReturns();
       renderPortfolio();
       refreshPortfolioPrices();
-      fetchDividendReturns();
     } catch (err) { alert(err.message); }
   }
 
   fetchPortfolioFromServer(currentUser.id)
-    .then(p => { savePortfolio(p); renderPortfolio(); refreshPortfolioPrices(); fetchDividendReturns(); })
+    .then(async p => { savePortfolio(p); await fetchDividendReturns(); renderPortfolio(); refreshPortfolioPrices(); })
     .catch(e => console.warn(e.message));
 
   // Logout
