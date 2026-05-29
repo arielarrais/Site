@@ -441,7 +441,12 @@ input:focus {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
+}
+
+.asset-count {
+  font-size: 13px;
+  font-weight: 400;
+  color: #888;
 }
 
 .grid-row {

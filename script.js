@@ -610,6 +610,7 @@ if (isDashboard) {
     const portfolio = getPortfolio();
     if (!portfolio.length) {
       portfolioListElement.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
+      document.getElementById('asset-count').textContent = '';
       portfolioSummary.textContent = 'Adicione ativos ao clicar em "Procurar ativo".';
       document.getElementById('metrics-row').classList.add('hidden');
       return;
@@ -786,6 +787,7 @@ if (isDashboard) {
     }).join('');
 
     portfolioListElement.innerHTML = gridHeaders + gridRows;
+    document.getElementById('asset-count').textContent = `(${grouped.length})`;
 
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
     const totalDivSummary = totalWithDividends - totalInvested;
