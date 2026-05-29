@@ -749,6 +749,7 @@ if (isDashboard) {
               </div>
               <div class="edit-launch-form hidden" data-id="${item.id}">
                 <div class="add-launch-inner">
+                  <div class="form-title">Editar lançamento</div>
                   <label>Quantidade <input class="el-quantity" type="number" min="1" step="1" value="${item.quantity}" /></label>
                   <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${(item.purchasePrice ?? itemCurrentPrice).toFixed(2)}" /></label>
                   <label>Data <input class="el-date date-br" type="date" value="${itemDate || getTodayInputValue()}" /></label>
@@ -760,6 +761,7 @@ if (isDashboard) {
           }).join('')}
           <div class="add-launch-form" data-ticker="${group.ticker}">
             <div class="add-launch-inner">
+              <div class="form-title">Novo lançamento</div>
               <label>Quantidade <input class="al-quantity" type="number" min="1" step="1" value="1" /></label>
               <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${currentPrice.toFixed(2)}" /></label>
               <label>Data <input class="al-date date-br" type="date" value="${getTodayInputValue()}" /></label>

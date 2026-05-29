@@ -679,6 +679,14 @@ input:focus {
   flex-wrap: wrap;
 }
 
+.add-launch-inner .form-title {
+  width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 4px;
+}
+
 .add-launch-inner label {
   display: grid;
   gap: 4px;
