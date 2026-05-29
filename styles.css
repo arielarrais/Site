@@ -133,7 +133,6 @@ input:focus {
 .btn-secondary {
   background: #e0e0e0;
   color: #333;
-  width: auto;
   padding: 8px 20px;
   margin: 0;
 }
@@ -677,6 +676,11 @@ input:focus {
   gap: 12px;
   align-items: end;
   flex-wrap: wrap;
+}
+
+.add-launch-inner .btn {
+  margin: 0;
+  padding: 12px;
 }
 
 .add-launch-inner .form-title {
