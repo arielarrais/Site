@@ -330,12 +330,14 @@ if (isDashboard) {
       const profitLoss = value - cost;
       const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
       const costWithDiv = value + totalDiv;
+      const rentabilidade = costWithDiv - cost;
+      const rentPct = cost > 0 ? (rentabilidade / cost * 100) : 0;
       const cells = row.querySelectorAll('.grid-cell');
 
       totalValue += value;
       totalInvested += cost;
 
-      if (cells.length >= 10) {
+      if (cells.length >= 11) {
         cells[3].textContent = currentPrice ? formatCurrency(currentPrice) : '—';
         cells[4].textContent = formatCurrency(averagePrice);
         cells[6].textContent = formatCurrency(value);
@@ -343,6 +345,8 @@ if (isDashboard) {
         cells[8].textContent = formatCurrency(costWithDiv);
         cells[9].textContent = formatCurrency(profitLoss);
         cells[9].className = 'grid-cell ' + (profitLoss >= 0 ? 'profit' : 'loss');
+        cells[10].innerHTML = `${formatCurrency(rentabilidade)} <span class="pct">(${rentPct >= 0 ? '+' : ''}${rentPct.toFixed(2)}%)</span>`;
+        cells[10].className = 'grid-cell ' + (rentabilidade >= 0 ? 'profit' : 'loss');
       }
 
       const details = portfolioListElement.querySelector(`.grid-details[data-group="${group.ticker}"]`);
@@ -641,6 +645,7 @@ if (isDashboard) {
       _totalDiv: dividendReturns.get(g.ticker) || 0,
       _costWithDiv: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0),
       _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
+      _rentabilidade: ((getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0)) - g.totalCost,
     }));
 
     if (portfolioSort.key) {
@@ -674,6 +679,7 @@ if (isDashboard) {
         <div class="grid-cell">${ps('_totalDiv', 'Dividendos')}</div>
         <div class="grid-cell">${ps('_costWithDiv', 'Total c/ Dividendos')}</div>
         <div class="grid-cell">${ps('_profitLoss', 'Resultado')}</div>
+        <div class="grid-cell">${ps('_rentabilidade', 'Rentab. c/ Dividendos')}</div>
         <div class="grid-cell">Ações</div>
       </div>
     `;
@@ -687,6 +693,8 @@ if (isDashboard) {
       const costWithDiv = value + totalDiv;
       const profitLoss = value - cost;
       const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
+      const rentabilidade = costWithDiv - cost;
+      const rentPct = cost > 0 ? (rentabilidade / cost * 100) : 0;
 
       return `
         <div class="grid-row" data-ticker="${group.ticker}">
@@ -702,6 +710,7 @@ if (isDashboard) {
           <div class="grid-cell profit">${formatCurrency(totalDiv)}</div>
           <div class="grid-cell">${formatCurrency(costWithDiv)}</div>
           <div class="grid-cell ${profitLoss >= 0 ? 'profit' : 'loss'}">${formatCurrency(profitLoss)}</div>
+          <div class="grid-cell ${rentabilidade >= 0 ? 'profit' : 'loss'}">${formatCurrency(rentabilidade)} <span class="pct">(${rentPct >= 0 ? '+' : ''}${rentPct.toFixed(2)}%)</span></div>
           <div class="grid-cell">
             <button class="group-toggle-button grid-btn" type="button" data-group="${group.ticker}" aria-expanded="false" title="Detalhes">+</button>
             <div class="three-dot-menu" style="display:inline-block">
