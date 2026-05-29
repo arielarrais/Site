@@ -73,8 +73,11 @@ async function saveDividends(pool, assetMap, dividends) {
     }
 
     const existing = await pool.query(
-      "SELECT id FROM asset_dividends WHERE assetid = $1 AND comdate = $2 AND grossamount = $3",
-      [assetId, comDate, grossAmount]
+      `SELECT id FROM asset_dividends 
+       WHERE assetid = $1 AND grossamount = $3
+         AND (LEFT(comdate, 7) = LEFT($2, 7) OR LEFT(paymentdate, 7) = LEFT($2, 7)
+           OR LEFT(comdate, 7) = LEFT($4, 7) OR LEFT(paymentdate, 7) = LEFT($4, 7))`,
+      [assetId, comDate, grossAmount, paymentDate || comDate]
     );
     if (existing.rows.length > 0) {
       skipped++;

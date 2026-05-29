@@ -660,6 +660,10 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
 
 app.post('/api/admin/sync-dividends', async (req, res) => {
   try {
+    const today = new Date().getDay();
+    if (today !== 1) {
+      return res.json({ message: 'Sincronização de dividendos disponível apenas às segundas-feiras.' });
+    }
     res.json({ message: 'Sincronização de dividendos iniciada em segundo plano.' });
     syncAllDividends(pool).catch(err => console.error('Erro no sync automático:', err));
   } catch (err) {
