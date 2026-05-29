@@ -724,7 +724,7 @@ async function seedAssetsDatabase() {
   console.log(`${count} ativos inseridos no banco.`);
 }
 
-app.listen(port, '127.0.0.1', async () => {
+app.listen(port, '0.0.0.0', async () => {
   try {
     await initDb();
     await migratePortfolioTableIfNeeded();
