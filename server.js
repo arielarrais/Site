@@ -737,14 +737,7 @@ app.listen(port, '0.0.0.0', async () => {
     console.error('Erro na inicialização do banco:', err);
   }
 
-  const SYNC_INTERVAL = 7 * 24 * 60 * 60 * 1000;
-  setTimeout(() => {
-    syncAllDividends(pool).catch(err => console.error('Erro no sync inicial:', err));
-  }, 60000);
-  setInterval(() => {
-    syncAllDividends(pool).catch(err => console.error('Erro no sync agendado:', err));
-  }, SYNC_INTERVAL);
-  console.log(`Auto-sync de dividendos agendado a cada ${SYNC_INTERVAL / 86400000} dias.`);
+  // Sync manual apenas via botão em /api/admin/sync-dividends
 
   const os = require('os');
   const ip = Object.values(os.networkInterfaces()).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';

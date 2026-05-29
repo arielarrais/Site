@@ -303,7 +303,81 @@ if (isDashboard) {
       console.warn('Batch falhou, buscando individualmente...');
       await Promise.allSettled(tickers.map(t => fetchQuotePrice(t)));
     }
-    renderPortfolio();
+    updatePriceDisplay();
+  }
+
+  function updatePriceDisplay() {
+    const portfolio = getPortfolio();
+    if (!portfolio.length) return;
+    const grouped = Object.values(portfolio.reduce((acc, item) => {
+      if (!acc[item.ticker]) acc[item.ticker] = { ticker: item.ticker, items: [], totalQuantity: 0, totalCost: 0 };
+      acc[item.ticker].items.push(item);
+      acc[item.ticker].totalQuantity += item.quantity;
+      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
+      return acc;
+    }, {}));
+
+    let totalValue = 0;
+    let totalInvested = 0;
+
+    for (const group of grouped) {
+      const row = portfolioListElement.querySelector(`.grid-row[data-ticker="${group.ticker}"]`);
+      if (!row) continue;
+      const currentPrice = getAssetCurrentPrice(group.ticker);
+      const value = currentPrice * group.totalQuantity;
+      const cost = group.totalCost;
+      const totalDiv = dividendReturns.get(group.ticker) || 0;
+      const costWithDiv = cost + totalDiv;
+      const profitLoss = value - cost;
+      const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
+      const cells = row.querySelectorAll('.grid-cell');
+
+      totalValue += value;
+      totalInvested += cost;
+
+      if (cells.length >= 10) {
+        cells[3].textContent = currentPrice ? formatCurrency(currentPrice) : '—';
+        cells[4].textContent = formatCurrency(averagePrice);
+        cells[6].textContent = formatCurrency(value);
+        cells[8].textContent = formatCurrency(costWithDiv);
+        cells[9].textContent = formatCurrency(profitLoss);
+        cells[9].className = 'grid-cell ' + (profitLoss >= 0 ? 'profit' : 'loss');
+      }
+
+      const details = portfolioListElement.querySelector(`.grid-details[data-group="${group.ticker}"]`);
+      const addForm = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${group.ticker}"]`);
+      if (addForm && !addForm.classList.contains('hidden')) {
+        addForm.querySelector('.al-price').value = currentPrice.toFixed(2);
+      }
+
+      if (details && !details.classList.contains('hidden')) {
+        group.items.forEach(item => {
+          const editForm = details.querySelector(`.edit-launch-form[data-id="${item.id}"]`);
+          if (!editForm) return;
+          const detailRow = editForm.previousElementSibling;
+          if (!detailRow || !detailRow.classList.contains('grid-detail-row')) return;
+          const itemCurrentPrice = currentPrice;
+          const itemValue = itemCurrentPrice * item.quantity;
+          const itemCost = (item.purchasePrice ?? itemCurrentPrice) * item.quantity;
+          const itemProfitLoss = itemValue - itemCost;
+          const cells2 = detailRow.querySelectorAll('.grid-detail-cell');
+          if (cells2.length >= 5) {
+            cells2[2].querySelector('span:last-child').textContent = formatCurrency(item.purchasePrice ?? itemCurrentPrice);
+            cells2[3].querySelector('span:last-child').textContent = formatCurrency(itemCost);
+            cells2[4].querySelector('span:last-child').textContent = formatCurrency(itemProfitLoss);
+          }
+        });
+      }
+    }
+
+    const totalWithDividends = grouped.reduce((sum, g) => sum + g.totalCost + (dividendReturns.get(g.ticker) || 0), 0);
+    const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
+    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Custo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    metricTotalValue.textContent = formatCurrency(totalValue);
+    metricInvested.textContent = formatCurrency(totalInvested);
+    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
+    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    metricCostDividends.textContent = formatCurrency(totalWithDividends);
   }
 
   async function fetchDividendReturns() {
@@ -609,7 +683,7 @@ if (isDashboard) {
       const averagePrice = group.totalQuantity ? cost / group.totalQuantity : 0;
 
       return `
-        <div class="grid-row">
+        <div class="grid-row" data-ticker="${group.ticker}">
           <div class="grid-cell">
             <a href="#" class="ticker-link" data-ticker="${group.ticker}"><strong>${group.ticker}</strong></a>
           </div>
