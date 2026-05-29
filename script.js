@@ -346,10 +346,6 @@ if (isDashboard) {
       }
 
       const details = portfolioListElement.querySelector(`.grid-details[data-group="${group.ticker}"]`);
-      const addForm = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${group.ticker}"]`);
-      if (addForm && !addForm.classList.contains('hidden')) {
-        addForm.querySelector('.al-price').value = currentPrice.toFixed(2);
-      }
 
       if (details && !details.classList.contains('hidden')) {
         group.items.forEach(item => {
