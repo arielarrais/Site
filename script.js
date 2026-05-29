@@ -787,7 +787,7 @@ if (isDashboard) {
     }).join('');
 
     portfolioListElement.innerHTML = gridHeaders + gridRows;
-    document.getElementById('asset-count').textContent = `(${grouped.length})`;
+    document.getElementById('asset-count').textContent = `${grouped.length} ativos`;
 
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
     const totalDivSummary = totalWithDividends - totalInvested;
