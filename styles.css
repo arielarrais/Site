@@ -449,6 +449,7 @@ input:focus {
   grid-template-columns: 65px 55px 65px 90px 90px 95px 95px 95px 105px 95px 120px auto;
   column-gap: 2px;
   border-bottom: 1px solid #e8e8ff;
+  white-space: nowrap;
 }
 
 .grid-header {
