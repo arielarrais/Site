@@ -849,9 +849,15 @@ if (isDashboard) {
     if (addOption) {
       const ticker = addOption.dataset.ticker;
       document.querySelectorAll('.three-dot-dropdown').forEach(d => d.classList.add('hidden'));
+      const details = portfolioListElement.querySelector(`.grid-details[data-group="${ticker}"]`);
+      if (details && details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        const btn = portfolioListElement.querySelector(`.group-toggle-button[data-group="${ticker}"]`);
+        if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
+      }
       const form = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${ticker}"]`);
       if (form) {
-        form.classList.toggle('hidden');
+        form.classList.remove('hidden');
       }
       return;
     }
