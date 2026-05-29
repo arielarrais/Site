@@ -766,6 +766,7 @@ if (isDashboard) {
               <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${currentPrice.toFixed(2)}" /></label>
               <label>Data <input class="al-date date-br" type="date" value="${getTodayInputValue()}" /></label>
               <button class="btn btn-primary al-save" type="button" data-ticker="${group.ticker}" style="width:auto">Salvar</button>
+              <button class="btn btn-secondary al-cancel" type="button" style="width:auto">Cancelar</button>
             </div>
           </div>
         </div>
@@ -992,6 +993,13 @@ if (isDashboard) {
     const elCancelBtn = event.target.closest('.el-cancel');
     if (elCancelBtn) {
       const form = elCancelBtn.closest('.edit-launch-form');
+      if (form) form.classList.add('hidden');
+      return;
+    }
+
+    const alCancelBtn = event.target.closest('.al-cancel');
+    if (alCancelBtn) {
+      const form = alCancelBtn.closest('.add-launch-form');
       if (form) form.classList.add('hidden');
       return;
     }
