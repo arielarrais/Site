@@ -753,7 +753,7 @@ if (isDashboard) {
                   <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${(item.purchasePrice ?? itemCurrentPrice).toFixed(2)}" /></label>
                   <label>Data <input class="el-date date-br" type="date" value="${itemDate || getTodayInputValue()}" /></label>
                   <button class="btn btn-primary el-save" type="button" data-id="${item.id}" style="width:auto">Salvar</button>
-                  <button class="el-cancel" type="button" style="width:auto">Cancelar</button>
+                  <button class="btn btn-secondary el-cancel" type="button" style="width:auto">Cancelar</button>
                 </div>
               </div>
             `;
