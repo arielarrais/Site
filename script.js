@@ -95,11 +95,27 @@ if (isDashboard) {
     window.location.href = '/';
   }
 
-  const adminBtn = document.getElementById('admin-button');
-  adminBtn.classList.remove('hidden');
-  adminBtn.addEventListener('click', () => {
-    window.location.href = '/ativos';
+  const isAdmin = currentUser && currentUser.username === 'admin';
+  if (isAdmin) {
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
+  }
+  document.querySelectorAll('.sidebar-link').forEach(el => {
+    if (el.dataset.page === 'dashboard') el.classList.add('active');
   });
+
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('sidebar-toggle');
+  if (sidebar && toggleBtn) {
+    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+      sidebar.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
+    }
+    toggleBtn.addEventListener('click', () => {
+      const collapsed = sidebar.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed', collapsed);
+      localStorage.setItem('sidebar-collapsed', String(collapsed));
+    });
+  }
 
   const portfolioPanel = document.getElementById('portfolio-panel');
   const assetSearchForm = document.getElementById('asset-search-form');

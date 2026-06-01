@@ -6,13 +6,49 @@
   <title>Ativos</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="with-sidebar">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header" id="sidebar-toggle">
+      <span class="sidebar-brand sidebar-expanded">Investimentos</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-link" data-page="dashboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </span>
+        <span class="sidebar-expanded">Dashboard</span>
+      </a>
+      <a href="/ativos" class="sidebar-link" data-page="ativos">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </span>
+        <span class="sidebar-expanded">Ativos</span>
+      </a>
+      <a href="/usuarios" class="sidebar-link admin-only hidden" data-page="usuarios">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </span>
+        <span class="sidebar-expanded">Usuarios</span>
+      </a>
+    </nav>
+  </aside>
   <nav class="top-nav">
     <div class="top-nav-brand">Ativos</div>
     <div class="top-nav-actions">
       <button id="sync-dividends-button" class="btn btn-secondary">Sync Dividendos</button>
       <button id="sync-all-button" class="btn btn-secondary">Sync Brapi</button>
-      <button id="dashboard-button" class="btn btn-secondary">Dashboard</button>
       <button id="logout-button-admin" class="btn btn-danger">Sair</button>
     </div>
   </nav>

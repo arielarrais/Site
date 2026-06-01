@@ -573,6 +573,10 @@ app.get('/ativos', (req, res) => {
   res.sendFile(path.join(__dirname, 'ativos.html'));
 });
 
+app.get('/usuarios', (req, res) => {
+  res.sendFile(path.join(__dirname, 'usuarios.html'));
+});
+
 app.get('/api/admin/assets', async (req, res) => {
   try {
     const result = await pool.query(
@@ -670,6 +674,18 @@ app.post('/api/admin/sync-dividends', async (req, res) => {
   }
 });
 
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, fullname, email FROM users ORDER BY id'
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar usuários:', err);
+    res.status(500).json({ error: 'Erro ao buscar usuários.' });
+  }
+});
+
 app.use((req, res) => {
   res.redirect('/');
 });
@@ -734,24 +750,6 @@ app.listen(port, '0.0.0.0', async () => {
     await seedAssetsDatabase();
   } catch (err) {
     console.error('Erro na inicialização do banco:', err);
-  }
-
-  const isMonday = new Date().getDay() === 1;
-  const SYNC_INTERVAL = 7 * 24 * 60 * 60 * 1000;
-  if (isMonday) {
-    setTimeout(() => {
-      syncAllDividends(pool).catch(err => console.error('Erro no sync inicial:', err));
-    }, 60000);
-  }
-  setInterval(() => {
-    if (new Date().getDay() === 1) {
-      syncAllDividends(pool).catch(err => console.error('Erro no sync agendado:', err));
-    }
-  }, SYNC_INTERVAL);
-  if (isMonday) {
-    console.log(`Auto-sync de dividendos agendado a cada 7 dias.`);
-  } else {
-    console.log(`Auto-sync de dividendos agendado (próxima execução na segunda-feira).`);
   }
 
   const os = require('os');

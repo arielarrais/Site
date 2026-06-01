@@ -927,3 +927,191 @@ input:focus {
 .btn-sync-brapi:hover {
   background: #f0f0ff;
 }
+
+/* ===================== SIDEBAR ===================== */
+body.with-sidebar {
+  display: block;
+  padding: 80px 20px 20px 240px;
+  transition: padding 0.2s ease;
+}
+
+body.with-sidebar.sidebar-collapsed {
+  padding: 80px 20px 20px 80px;
+}
+
+.sidebar {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  width: 220px;
+  height: calc(100vh - 56px);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(8px);
+  border-right: 1px solid #e8e8ff;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 60px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e8e8ff;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.sidebar-header:hover {
+  background: #f0f2ff;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 14px 0;
+  justify-content: center;
+}
+
+.sidebar-brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sidebar.collapsed .sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  transform: rotate(180deg);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  flex: 1;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #555;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-nav a {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar-nav a:hover {
+  background: #f0f2ff;
+  color: #1a1a2e;
+}
+
+.sidebar-nav a.active {
+  background: #e8ecff;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.sidebar-nav a .nav-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.sidebar-nav a .nav-icon svg {
+  display: block;
+}
+
+.sidebar-expanded {
+  overflow: hidden;
+  transition: opacity 0.15s ease, width 0.2s ease;
+}
+
+.sidebar.collapsed .sidebar-expanded {
+  width: 0;
+  opacity: 0;
+  display: none;
+}
+
+/* ===================== USUARIOS PAGE ===================== */
+.users-table-wrap {
+  overflow-x: auto;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.users-table th {
+  background: #f0f2ff;
+  font-weight: 700;
+  font-size: 12px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 10px;
+  text-align: left;
+  border-bottom: 2px solid #d0d5f0;
+}
+
+.users-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e8e8ff;
+  color: #1a1a2e;
+}
+
+.users-table tbody tr:hover {
+  background: #f0f2ff;
+}
+
+.user-role-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.user-role-badge.admin {
+  background: #e8ecff;
+  color: #667eea;
+}
+
+.user-role-badge.user {
+  background: #f0f0f0;
+  color: #888;
+}
+
+body.with-sidebar .container.dashboard-active {
+  max-width: 1200px;
+  margin: 0;
+}

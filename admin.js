@@ -50,9 +50,23 @@ document.getElementById('logout-button-admin').addEventListener('click', () => {
   window.location.href = '/';
 });
 
-document.getElementById('dashboard-button').addEventListener('click', () => {
-  window.location.href = '/dashboard';
+document.querySelectorAll('.sidebar-link').forEach(el => {
+  if (el.dataset.page === 'ativos') el.classList.add('active');
 });
+
+const sidebar = document.getElementById('sidebar');
+const toggleBtn = document.getElementById('sidebar-toggle');
+if (sidebar && toggleBtn) {
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    sidebar.classList.add('collapsed');
+    document.body.classList.add('sidebar-collapsed');
+  }
+  toggleBtn.addEventListener('click', () => {
+    const collapsed = sidebar.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    localStorage.setItem('sidebar-collapsed', String(collapsed));
+  });
+}
 
 let selectedAssetId = null;
 
@@ -207,7 +221,9 @@ document.getElementById('dividend-form').addEventListener('submit', async (e) =>
   }
 });
 
-if (!isAdmin) {
+if (isAdmin) {
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
+} else {
   document.getElementById('sync-all-button').classList.add('hidden');
   document.getElementById('sync-dividends-button').classList.add('hidden');
 }
