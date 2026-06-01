@@ -31,6 +31,27 @@ function formatCurrency(value) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function getPriceSource() {
+  return localStorage.getItem('price-source') || 'brapi';
+}
+
+function getSheetUrl() {
+  return localStorage.getItem('sheet-url') || '';
+}
+
+let sheetPricesCache = null;
+let sheetPricesTimestamp = 0;
+
+async function refreshSheetPrices() {
+  const url = getSheetUrl();
+  if (!url) throw new Error('URL da planilha não configurada.');
+  const now = Date.now();
+  if (sheetPricesCache && (now - sheetPricesTimestamp) < 60000) return;
+  const prices = await req(`/api/quotes/sheets?url=${encodeURIComponent(url)}`);
+  sheetPricesCache = prices;
+  sheetPricesTimestamp = now;
+}
+
 // ===================== LOGIN PAGE =====================
 if (!isDashboard) {
   const loginCard = document.getElementById('login-card');
@@ -273,7 +294,17 @@ if (isDashboard) {
   }
 
   async function fetchQuotePrice(ticker) {
-    const quote = await req(`/api/quote?ticker=${encodeURIComponent(ticker)}`);
+    const source = getPriceSource();
+    let quote;
+    if (source === 'yahoo') {
+      quote = await req(`/api/quote/yahoo?ticker=${encodeURIComponent(ticker)}`);
+    } else if (source === 'sheets') {
+      await refreshSheetPrices();
+      quote = sheetPricesCache?.[ticker];
+      if (!quote) throw new Error('Ticker não encontrado na planilha.');
+    } else {
+      quote = await req(`/api/quote?ticker=${encodeURIComponent(ticker)}`);
+    }
     latestPrices.set(ticker, quote.price);
     if (assetByTicker.has(ticker)) {
       const asset = assetByTicker.get(ticker);
@@ -291,6 +322,16 @@ if (isDashboard) {
 
   async function fetchQuotes(tickers) {
     if (!tickers.length) return {};
+    const source = getPriceSource();
+    if (source === 'yahoo') {
+      return await req(`/api/quotes/yahoo?tickers=${encodeURIComponent(tickers.join(','))}`);
+    }
+    if (source === 'sheets') {
+      await refreshSheetPrices();
+      const result = {};
+      tickers.forEach(t => { if (sheetPricesCache?.[t]) result[t] = sheetPricesCache[t]; });
+      return result;
+    }
     return await req(`/api/quotes?tickers=${encodeURIComponent(tickers.join(','))}`);
   }
 

@@ -674,6 +674,130 @@ app.post('/api/admin/sync-dividends', async (req, res) => {
   }
 });
 
+// ===================== YAHOO FINANCE =====================
+app.get('/api/quote/yahoo', async (req, res) => {
+  const ticker = (req.query.ticker || '').trim().toUpperCase();
+  if (!ticker) return res.status(400).json({ error: 'Ticker é obrigatório.' });
+
+  try {
+    const yahooTicker = ticker.includes('.') ? ticker : `${ticker}.SA`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+
+    if (!meta || meta.regularMarketPrice == null) {
+      return res.status(404).json({ error: 'Preço não encontrado no Yahoo Finance.' });
+    }
+
+    res.json({
+      ticker,
+      price: Number(meta.regularMarketPrice),
+      name: meta.symbol || ticker,
+      changePercent: null,
+      time: null
+    });
+  } catch (error) {
+    console.error('Erro ao buscar cotação Yahoo:', error);
+    res.status(500).json({ error: 'Erro ao buscar preço no Yahoo Finance.' });
+  }
+});
+
+app.get('/api/quotes/yahoo', async (req, res) => {
+  const tickers = (req.query.tickers || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  if (!tickers.length) return res.status(400).json({ error: 'Tickers são obrigatórios.' });
+
+  try {
+    const results = await Promise.allSettled(tickers.map(async ticker => {
+      const yahooTicker = ticker.includes('.') ? ticker : `${ticker}.SA`;
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`;
+      const response = await fetch(url);
+      const data = await response.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      return { ticker, price: meta?.regularMarketPrice != null ? Number(meta.regularMarketPrice) : null };
+    }));
+
+    const mapped = {};
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.price != null) {
+        mapped[r.value.ticker] = { ticker: r.value.ticker, price: r.value.price, name: r.value.ticker, changePercent: null, time: null };
+      }
+    });
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Erro ao buscar cotações Yahoo:', error);
+    res.status(500).json({ error: 'Erro ao buscar preços no Yahoo Finance.' });
+  }
+});
+
+// ===================== GOOGLE SHEETS =====================
+const sheetPriceCache = { data: null, timestamp: 0, url: '' };
+
+app.get('/api/quotes/sheets', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'URL da planilha é obrigatória.' });
+
+  const now = Date.now();
+  if (sheetPriceCache.url === url && sheetPriceCache.data && (now - sheetPriceCache.timestamp) < 300000) {
+    return res.json(sheetPriceCache.data);
+  }
+
+  try {
+    const response = await fetch(url);
+    const csv = await response.text();
+
+    let lines = csv.split('\n').filter(l => l.trim());
+    if (!lines.length) return res.status(500).json({ error: 'Planilha vazia.' });
+
+    const headerLine = lines[0];
+    let sep = ',';
+    for (const s of [',', ';', '\t']) {
+      if (headerLine.split(s).length >= 3) { sep = s; break; }
+    }
+
+    const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+    const fundosIdx = headers.findIndex(h =>
+      h.toUpperCase().includes('FUNDO') || h.toUpperCase() === 'TICKER' || h.toUpperCase() === 'ATIVO' || h.toUpperCase() === 'AÇÃO' || h.toUpperCase() === 'ACAO'
+    );
+    const precoIdx = headers.findIndex(h =>
+      h.toUpperCase().includes('PREÇO') || h.toUpperCase().includes('PRECO') || h.toUpperCase().includes('ATUAL')
+    );
+
+    if (fundosIdx < 0 || precoIdx < 0) {
+      return res.status(500).json({ error: 'Colunas FUNDOS e PREÇO ATUAL não encontradas na planilha.' });
+    }
+
+    const prices = {};
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+      const ticker = cols[fundosIdx]?.trim().toUpperCase();
+      let priceStr = cols[precoIdx]?.trim();
+      if (!ticker || !priceStr) continue;
+
+      priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+      const price = parseFloat(priceStr);
+      if (!isNaN(price) && price > 0) {
+        prices[ticker] = { ticker, price, name: ticker, changePercent: null, time: null };
+      }
+    }
+
+    sheetPriceCache.data = prices;
+    sheetPriceCache.timestamp = now;
+    sheetPriceCache.url = url;
+
+    res.json(prices);
+  } catch (error) {
+    console.error('Erro ao buscar planilha:', error);
+    res.status(500).json({ error: 'Erro ao buscar preços da planilha.' });
+  }
+});
+
+// ===================== CONFIGURACOES =====================
+app.get('/configuracoes', (req, res) => {
+  res.sendFile(path.join(__dirname, 'configuracoes.html'));
+});
+
 app.get('/api/admin/users', async (req, res) => {
   try {
     const result = await pool.query(

@@ -1,0 +1,104 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configurações</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="with-sidebar">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header" id="sidebar-toggle">
+      <span class="sidebar-brand sidebar-expanded">Investimentos</span>
+      <span class="toggle-icon sidebar-expanded">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </span>
+      <span class="toggle-icon sidebar-collapsed-only">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="sidebar-link" data-page="dashboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </span>
+        <span class="sidebar-expanded">Dashboard</span>
+      </a>
+      <a href="/ativos" class="sidebar-link" data-page="ativos">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </span>
+        <span class="sidebar-expanded">Ativos</span>
+      </a>
+      <a href="/usuarios" class="sidebar-link admin-only hidden" data-page="usuarios">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </span>
+        <span class="sidebar-expanded">Usuarios</span>
+      </a>
+      <a href="/configuracoes" class="sidebar-link" data-page="configuracoes">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <span class="sidebar-expanded">Configuracoes</span>
+      </a>
+    </nav>
+  </aside>
+  <nav class="top-nav">
+    <div class="top-nav-brand">Configurações</div>
+    <div class="top-nav-actions">
+      <button id="logout-button" class="btn btn-danger">Sair</button>
+    </div>
+  </nav>
+
+  <div class="container dashboard-active" id="main-container">
+    <div class="card dashboard-card">
+      <div class="dashboard-header">
+        <h1>Configurações</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Fonte de preços</h3>
+          <p class="small-note" style="margin-bottom:16px">Escolha de onde os preços dos ativos serão obtidos no Dashboard.</p>
+          <div class="settings-group">
+            <label class="settings-option">
+              <input type="radio" name="price-source" value="brapi" />
+              <div>
+                <strong>Brapi API</strong>
+                <span class="settings-desc">API pública com dados do mercado brasileiro (padrão)</span>
+              </div>
+            </label>
+            <label class="settings-option">
+              <input type="radio" name="price-source" value="yahoo" />
+              <div>
+                <strong>Yahoo Finance</strong>
+                <span class="settings-desc">Dados globais via Yahoo Finance</span>
+              </div>
+            </label>
+            <label class="settings-option">
+              <input type="radio" name="price-source" value="sheets" />
+              <div>
+                <strong>Planilha Google Sheets</strong>
+                <span class="settings-desc">Preços a partir de uma planilha do Google Sheets</span>
+              </div>
+            </label>
+          </div>
+          <div id="sheet-config" class="hidden" style="margin-top:16px;padding-top:16px;border-top:1px solid #e0e0e0">
+            <div class="input-group">
+              <label for="sheet-url">URL da planilha Google Sheets</label>
+              <input id="sheet-url" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." />
+              <p class="small-note">Compartilhe a planilha como "Qualquer um com link pode ver" e cole o link aqui. O sistema usará a primeira aba.</p>
+            </div>
+            <button id="test-sheet" class="btn btn-secondary" style="width:auto">Testar conexão</button>
+            <span id="sheet-status" class="small-note" style="margin-left:12px"></span>
+          </div>
+          <button id="save-settings" class="btn btn-primary" style="width:auto;margin-top:16px">Salvar configurações</button>
+          <span id="save-status" class="small-note" style="margin-left:12px"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="configuracoes.js"></script>
+</body>
+</html>
