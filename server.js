@@ -290,6 +290,32 @@ app.post('/api/portfolio', async (req, res) => {
   }
 
   try {
+    const exists = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [normalizedTicker]);
+    if (exists.rows.length === 0) {
+      try {
+        const yahooTicker = normalizedTicker.includes('.') ? normalizedTicker : `${normalizedTicker}.SA`;
+        const yRes = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`,
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+        );
+        const yData = await yRes.json();
+        const yMeta = yData?.chart?.result?.[0]?.meta;
+        if (yMeta) {
+          const name = String(yMeta.shortName || yMeta.symbol || normalizedTicker).substring(0, 255);
+          const longName = yMeta.longName ? String(yMeta.longName).substring(0, 255) : null;
+          let assettype = 'acao';
+          if (normalizedTicker.endsWith('11')) assettype = 'fii';
+          else if (yMeta.instrumentType === 'ETF' || yMeta.instrumentType === 'FUND') assettype = 'fii';
+          await pool.query(
+            'INSERT INTO b3_assets (ticker, name, longname, assettype) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker) DO NOTHING',
+            [normalizedTicker, name, longName, assettype]
+          );
+        }
+      } catch (yErr) {
+        console.warn('Auto-create falhou ao cadastrar compra:', yErr.message);
+      }
+    }
+
     const result = await pool.query(
       'INSERT INTO portfolio_items (userid, ticker, quantity, purchaseprice, purchasedat) VALUES ($1, $2, $3, $4, $5) RETURNING id, ticker, quantity, purchaseprice, purchasedat',
       [userId, normalizedTicker, qty, price, purchaseDateValue]
@@ -396,6 +422,35 @@ app.get('/api/assets/types', async (req, res) => {
     );
     const map = {};
     result.rows.forEach(r => { map[r.ticker] = r.assettype; });
+
+    const missing = tickers.filter(t => !(t in map));
+    if (missing.length) {
+      for (const t of missing) {
+        try {
+          const yahooTicker = t.includes('.') ? t : `${t}.SA`;
+          const yRes = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+          );
+          const yData = await yRes.json();
+          const yMeta = yData?.chart?.result?.[0]?.meta;
+          if (yMeta) {
+            const name = String(yMeta.shortName || yMeta.symbol || t).substring(0, 255);
+            const longName = yMeta.longName ? String(yMeta.longName).substring(0, 255) : null;
+            let assettype = 'acao';
+            if (t.endsWith('11')) assettype = 'fii';
+            else if (yMeta.instrumentType === 'ETF' || yMeta.instrumentType === 'FUND') assettype = 'fii';
+            await pool.query(
+              'INSERT INTO b3_assets (ticker, name, longname, assettype) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker) DO NOTHING',
+              [t, name, longName, assettype]
+            );
+            map[t] = assettype;
+          }
+        } catch (yErr) {
+          console.warn(`Auto-create types falhou para ${t}:`, yErr.message);
+        }
+      }
+    }
     res.json(map);
   } catch (err) {
     console.error('Erro ao buscar tipos:', err);
