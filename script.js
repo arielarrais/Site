@@ -1151,7 +1151,16 @@ if (isDashboard) {
       try {
         await fetchQuotePrice(query.toUpperCase());
         asset = assetByTicker.get(query.toUpperCase());
-        if (!asset) {
+        if (asset) {
+          try {
+            const result = await req('/api/assets/auto-create', 'POST', { ticker: query.toUpperCase() });
+            const found = await findAsset(query.toUpperCase());
+            if (found) asset = found;
+            if (result.dividendsInserted > 0) await fetchDividendReturns();
+          } catch (e) {
+            console.warn('Auto-create falhou:', e.message);
+          }
+        } else {
           searchResult.innerHTML = '<p class="error">Ativo não encontrado. Tente um ticker válido da B3 ou FII.</p>';
           searchResult.classList.remove('hidden');
           return;

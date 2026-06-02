@@ -423,6 +423,90 @@ app.post('/api/b3-assets', async (req, res) => {
   }
 });
 
+app.post('/api/assets/auto-create', async (req, res) => {
+  const { ticker } = req.body;
+  if (!ticker) return res.status(400).json({ error: 'Ticker é obrigatório.' });
+
+  const normalizedTicker = String(ticker).trim().toUpperCase();
+
+  try {
+    const existing = await pool.query('SELECT id, ticker, name, assettype FROM b3_assets WHERE ticker = $1', [normalizedTicker]);
+    if (existing.rows.length > 0) {
+      const a = existing.rows[0];
+      return res.json({ id: a.id, ticker: a.ticker, name: a.name, assetType: a.assettype, alreadyExisted: true });
+    }
+
+    const yahooTicker = normalizedTicker.includes('.') ? normalizedTicker : `${normalizedTicker}.SA`;
+    const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`;
+    const chartRes = await fetch(chartUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    const chartData = await chartRes.json();
+    const meta = chartData?.chart?.result?.[0]?.meta;
+    if (!meta) return res.status(404).json({ error: 'Ativo não encontrado no Yahoo Finance.' });
+
+    const name = String(meta.shortName || meta.symbol || normalizedTicker).substring(0, 255);
+    const longName = meta.longName ? String(meta.longName).substring(0, 255) : null;
+
+    let assettype = 'acao';
+    if (normalizedTicker.endsWith('11')) assettype = 'fii';
+    else if (meta.instrumentType === 'ETF' || meta.instrumentType === 'FUND') assettype = 'fii';
+
+    const insertResult = await pool.query(
+      'INSERT INTO b3_assets (ticker, name, longname, assettype) VALUES ($1, $2, $3, $4) RETURNING id, ticker, name, assettype',
+      [normalizedTicker, name, longName, assettype]
+    );
+    const asset = insertResult.rows[0];
+
+    let dividendsInserted = 0;
+    try {
+      const divUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=5y&interval=1d&events=div`;
+      const divRes = await fetch(divUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      const divData = await divRes.json();
+      const dividends = divData?.chart?.result?.[0]?.events?.dividends;
+      if (dividends) {
+        for (const [tsStr, div] of Object.entries(dividends)) {
+          const ts = parseInt(tsStr);
+          const dateStr = new Date(ts * 1000).toISOString().split('T')[0];
+          const amount = parseFloat(div.amount) || 0;
+          if (amount > 0) {
+            const dup = await pool.query(
+              'SELECT id FROM asset_dividends WHERE assetid = $1 AND grossamount = $2 AND LEFT(comdate, 7) = LEFT($3, 7)',
+              [asset.id, amount, dateStr]
+            );
+            if (dup.rows.length === 0) {
+              await pool.query(
+                'INSERT INTO asset_dividends (assetid, comdate, grossamount, netamount, description, type) VALUES ($1, $2, $3, $4, $5, $6)',
+                [asset.id, dateStr, amount, amount, 'Dividendo', 'dividendo']
+              );
+              dividendsInserted++;
+            }
+          }
+        }
+      }
+    } catch (divErr) {
+      console.warn(`Erro ao buscar dividendos de ${normalizedTicker}:`, divErr.message);
+    }
+
+    res.json({
+      id: asset.id,
+      ticker: asset.ticker,
+      name: asset.name,
+      assetType: asset.assettype,
+      dividendsInserted
+    });
+  } catch (err) {
+    console.error('Erro ao criar ativo automaticamente:', err);
+    res.status(500).json({ error: 'Erro ao criar ativo automaticamente.' });
+  }
+});
+
 app.get('/api/dividends', async (req, res) => {
   const assetId = Number(req.query.assetId);
   const ticker = (req.query.ticker || '').trim().toUpperCase();
