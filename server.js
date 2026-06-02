@@ -386,6 +386,23 @@ app.get('/api/b3-assets', async (req, res) => {
   }
 });
 
+app.get('/api/assets/types', async (req, res) => {
+  const tickers = (req.query.tickers || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  if (!tickers.length) return res.json({});
+  try {
+    const result = await pool.query(
+      'SELECT ticker, assettype FROM b3_assets WHERE ticker = ANY($1)',
+      [tickers]
+    );
+    const map = {};
+    result.rows.forEach(r => { map[r.ticker] = r.assettype; });
+    res.json(map);
+  } catch (err) {
+    console.error('Erro ao buscar tipos:', err);
+    res.json({});
+  }
+});
+
 app.post('/api/b3-assets', async (req, res) => {
   const { ticker, name, assetType } = req.body;
   if (!ticker || !name) {

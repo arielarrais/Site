@@ -48,7 +48,14 @@ body {
 }
 
 .container.dashboard-active {
-  max-width: 1200px;
+  max-width: none;
+  width: 100%;
+}
+
+body.with-sidebar .container.dashboard-active {
+  max-width: none;
+  width: 100%;
+  margin: 0;
 }
 
 .card {
@@ -432,11 +439,14 @@ input:focus {
 }
 
 .portfolio-list {
-  display: grid;
+  overflow-y: auto;
   overflow-x: auto;
+  max-height: 800px;
+  min-height: 0;
 }
 
-.portfolio-list-header {
+.portfolio-list-header,
+.portfolio-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -933,6 +943,7 @@ body.with-sidebar {
   display: block;
   padding: 80px 20px 20px 240px;
   transition: padding 0.2s ease;
+  min-height: 100vh;
 }
 
 body.with-sidebar.sidebar-collapsed {
@@ -1135,11 +1146,6 @@ body.with-sidebar.sidebar-collapsed {
 .user-role-badge.user {
   background: #f0f0f0;
   color: #888;
-}
-
-body.with-sidebar .container.dashboard-active {
-  max-width: 1200px;
-  margin: 0;
 }
 
 /* ===================== SETTINGS PAGE ===================== */

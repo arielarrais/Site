@@ -103,11 +103,22 @@
 
           <div class="info-box">
             <div class="portfolio-list-card">
-              <div class="portfolio-list-header">
-                <h2>Ativos cadastrados <span id="asset-count" class="asset-count"></span></h2>
-                <p id="portfolio-summary" class="small-note"></p>
+              <div class="portfolio-section-header">
+                <h2>Ações <span id="stock-count" class="asset-count"></span></h2>
+                <button class="toggle-section-btn" data-section="stocks" aria-expanded="true">−</button>
               </div>
-              <div id="portfolio-list" class="portfolio-list"></div>
+              <p id="stocks-summary" class="small-note"></p>
+              <div id="stocks-list" class="portfolio-list"></div>
+            </div>
+          </div>
+          <div class="info-box">
+            <div class="portfolio-list-card">
+              <div class="portfolio-section-header">
+                <h2>Fundos imobiliários <span id="fii-count" class="asset-count"></span></h2>
+                <button class="toggle-section-btn" data-section="fiis" aria-expanded="true">−</button>
+              </div>
+              <p id="fiis-summary" class="small-note"></p>
+              <div id="fiis-list" class="portfolio-list"></div>
             </div>
           </div>
         </div>

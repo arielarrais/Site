@@ -142,8 +142,19 @@ if (isDashboard) {
   const assetSearchForm = document.getElementById('asset-search-form');
   const assetQueryInput = document.getElementById('asset-query');
   const searchResult = document.getElementById('search-result');
-  const portfolioListElement = document.getElementById('portfolio-list');
-  const portfolioSummary = document.getElementById('portfolio-summary');
+  const stocksListElement = document.getElementById('stocks-list');
+  const fiisListElement = document.getElementById('fiis-list');
+  const stocksSummary = document.getElementById('stocks-summary');
+  const fiisSummary = document.getElementById('fiis-summary');
+  const stockCountEl = document.getElementById('stock-count');
+  const fiiCountEl = document.getElementById('fii-count');
+
+  function findInGrids(selector) {
+    return stocksListElement.querySelector(selector) || fiisListElement.querySelector(selector);
+  }
+  function findAllInGrids(selector) {
+    return [...stocksListElement.querySelectorAll(selector), ...fiisListElement.querySelectorAll(selector)];
+  }
   const metricTotalValue = document.getElementById('metric-total-value');
   const metricInvested = document.getElementById('metric-invested');
   const metricVariation = document.getElementById('metric-variation');
@@ -378,7 +389,7 @@ if (isDashboard) {
     let totalInvested = 0;
 
     for (const group of grouped) {
-      const row = portfolioListElement.querySelector(`.grid-row[data-ticker="${group.ticker}"]`);
+      const row = findInGrids(`.grid-row[data-ticker="${group.ticker}"]`);
       if (!row) continue;
       const currentPrice = getAssetCurrentPrice(group.ticker);
       const value = currentPrice * group.totalQuantity;
@@ -406,8 +417,8 @@ if (isDashboard) {
         cells[10].className = 'grid-cell ' + (rentabilidade >= 0 ? 'profit' : 'loss');
       }
 
-      const details = portfolioListElement.querySelector(`.grid-details[data-group="${group.ticker}"]`);
-      const addForm = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${group.ticker}"]`);
+      const details = findInGrids(`.grid-details[data-group="${group.ticker}"]`);
+      const addForm = findInGrids(`.add-launch-form[data-ticker="${group.ticker}"]`);
       if (addForm && !addForm.classList.contains('hidden')) {
         const priceInput = addForm.querySelector('.al-price');
         if (priceInput && (Number(priceInput.value) === 0 || priceInput.value === '')) {
@@ -437,7 +448,9 @@ if (isDashboard) {
 
     const totalWithDividends = totalValue + grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
     const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
-    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    const summaryText = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    stocksSummary.textContent = summaryText;
+    fiisSummary.textContent = summaryText;
     metricTotalValue.textContent = formatCurrency(totalValue);
     metricInvested.textContent = formatCurrency(totalInvested);
     metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
@@ -634,80 +647,21 @@ if (isDashboard) {
     });
   }
 
-  function renderPortfolio() {
-    const openDropdowns = new Set();
-    const openForms = new Set();
-    const openFormValues = new Map();
-    const openEditForms = new Set();
-    const openEditFormValues = new Map();
-    const openDetails = new Set();
-    portfolioListElement.querySelectorAll('.three-dot-dropdown:not(.hidden)').forEach(el => {
-      openDropdowns.add(el.dataset.ticker);
-    });
-    portfolioListElement.querySelectorAll('.add-launch-form:not(.hidden)').forEach(el => {
-      openForms.add(el.dataset.ticker);
-      openFormValues.set(el.dataset.ticker, {
-        quantity: el.querySelector('.al-quantity').value,
-        price: el.querySelector('.al-price').value,
-        date: el.querySelector('.al-date').value,
-      });
-    });
-    portfolioListElement.querySelectorAll('.edit-launch-form:not(.hidden)').forEach(el => {
-      openEditForms.add(el.dataset.id);
-      openEditFormValues.set(el.dataset.id, {
-        quantity: el.querySelector('.el-quantity').value,
-        price: el.querySelector('.el-price').value,
-        date: el.querySelector('.el-date').value,
-      });
-    });
-    portfolioListElement.querySelectorAll('.grid-details:not(.hidden)').forEach(el => {
-      openDetails.add(el.dataset.group);
-    });
+  function classifyTicker(ticker, typeMap) {
+    if (typeMap[ticker]) return typeMap[ticker];
+    return 'acao';
+  }
 
-    const portfolio = getPortfolio();
-    if (!portfolio.length) {
-      portfolioListElement.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
-      document.getElementById('asset-count').textContent = '';
-      portfolioSummary.textContent = 'Adicione ativos ao clicar em "Procurar ativo".';
-      document.getElementById('metrics-row').classList.add('hidden');
+  function renderGrid(groups, container, countEl, summaryEl) {
+    if (!groups.length) {
+      container.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
+      countEl.textContent = '';
+      summaryEl.textContent = '';
       return;
-    } else {
-      document.getElementById('metrics-row').classList.remove('hidden');
     }
 
-    const grouped = Object.values(portfolio.reduce((acc, item) => {
-      if (!acc[item.ticker]) {
-        acc[item.ticker] = { ticker: item.ticker, items: [], totalQuantity: 0, totalCost: 0 };
-      }
-      acc[item.ticker].items.push(item);
-      acc[item.ticker].totalQuantity += item.quantity;
-      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
-      return acc;
-    }, {}));
-
-    const totalValue = grouped.reduce((sum, group) => {
-      return sum + getAssetCurrentPrice(group.ticker) * group.totalQuantity;
-    }, 0);
-    const totalInvested = grouped.reduce((sum, group) => sum + group.totalCost, 0);
-    const totalWithDividends = grouped.reduce((sum, group) => {
-      const price = getAssetCurrentPrice(group.ticker);
-      const val = price * group.totalQuantity;
-      return sum + val + (dividendReturns.get(group.ticker) || 0);
-    }, 0);
-
-    const enriched = grouped.map(g => ({
-      ...g,
-      _currentPrice: getAssetCurrentPrice(g.ticker),
-      _averagePrice: g.totalQuantity ? g.totalCost / g.totalQuantity : 0,
-      _value: getAssetCurrentPrice(g.ticker) * g.totalQuantity,
-      _totalDiv: dividendReturns.get(g.ticker) || 0,
-      _costWithDiv: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0),
-      _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
-      _rentabilidade: ((getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0)) - g.totalCost,
-    }));
-
     if (portfolioSort.key) {
-      enriched.sort((a, b) => {
+      groups.sort((a, b) => {
         let va = a[portfolioSort.key], vb = b[portfolioSort.key];
         if (va == null) va = portfolioSort.dir === 'asc' ? Infinity : -Infinity;
         if (vb == null) vb = portfolioSort.dir === 'asc' ? Infinity : -Infinity;
@@ -742,8 +696,7 @@ if (isDashboard) {
       </div>
     `;
 
-    const gridRows = enriched.map((group) => {
-      const asset = assetByTicker.get(group.ticker);
+    const gridRows = groups.map((group) => {
       const currentPrice = getAssetCurrentPrice(group.ticker);
       const value = currentPrice * group.totalQuantity;
       const cost = group.totalCost;
@@ -843,55 +796,10 @@ if (isDashboard) {
       `;
     }).join('');
 
-    portfolioListElement.innerHTML = gridHeaders + gridRows;
-    document.getElementById('asset-count').textContent = `${grouped.length} ativos`;
+    container.innerHTML = gridHeaders + gridRows;
+    countEl.textContent = `${groups.length} ativos`;
 
-    const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
-    const totalDivSummary = totalWithDividends - totalInvested;
-    portfolioSummary.textContent = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
-    metricTotalValue.textContent = formatCurrency(totalValue);
-    metricInvested.textContent = formatCurrency(totalInvested);
-    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
-    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
-    metricCostDividends.textContent = formatCurrency(totalWithDividends);
-
-    openDropdowns.forEach(t => {
-      const el = portfolioListElement.querySelector(`.three-dot-dropdown[data-ticker="${t}"]`);
-      if (el) el.classList.remove('hidden');
-    });
-    openForms.forEach(t => {
-      const el = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${t}"]`);
-      if (el) {
-        el.classList.remove('hidden');
-        const vals = openFormValues.get(t);
-        if (vals) {
-          el.querySelector('.al-quantity').value = vals.quantity;
-          el.querySelector('.al-price').value = vals.price;
-          el.querySelector('.al-date').value = vals.date;
-        }
-      }
-    });
-    openEditForms.forEach(id => {
-      const el = portfolioListElement.querySelector(`.edit-launch-form[data-id="${id}"]`);
-      if (el) {
-        el.classList.remove('hidden');
-        const vals = openEditFormValues.get(id);
-        if (vals) {
-          el.querySelector('.el-quantity').value = vals.quantity;
-          el.querySelector('.el-price').value = vals.price;
-          el.querySelector('.el-date').value = vals.date;
-        }
-      }
-    });
-    openDetails.forEach(t => {
-      const el = portfolioListElement.querySelector(`.grid-details[data-group="${t}"]`);
-      if (el) el.classList.remove('hidden');
-      const btn = portfolioListElement.querySelector(`.group-toggle-button[data-group="${t}"]`);
-      if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
-    });
-    enhanceDateInputs();
-
-    portfolioListElement.querySelectorAll('.grid-header .psort').forEach(el => {
+    container.querySelectorAll('.grid-header .psort').forEach(el => {
       el.addEventListener('click', () => {
         const key = el.dataset.sort;
         if (portfolioSort.key === key) {
@@ -905,6 +813,147 @@ if (isDashboard) {
     });
   }
 
+  async function renderPortfolio() {
+    const openDropdowns = new Set();
+    const openForms = new Set();
+    const openFormValues = new Map();
+    const openEditForms = new Set();
+    const openEditFormValues = new Map();
+    const openDetails = new Set();
+    findAllInGrids('.three-dot-dropdown:not(.hidden)').forEach(el => {
+      openDropdowns.add(el.dataset.ticker);
+    });
+    findAllInGrids('.add-launch-form:not(.hidden)').forEach(el => {
+      openForms.add(el.dataset.ticker);
+      openFormValues.set(el.dataset.ticker, {
+        quantity: el.querySelector('.al-quantity').value,
+        price: el.querySelector('.al-price').value,
+        date: el.querySelector('.al-date').value,
+      });
+    });
+    findAllInGrids('.edit-launch-form:not(.hidden)').forEach(el => {
+      openEditForms.add(el.dataset.id);
+      openEditFormValues.set(el.dataset.id, {
+        quantity: el.querySelector('.el-quantity').value,
+        price: el.querySelector('.el-price').value,
+        date: el.querySelector('.el-date').value,
+      });
+    });
+    findAllInGrids('.grid-details:not(.hidden)').forEach(el => {
+      openDetails.add(el.dataset.group);
+    });
+
+    const portfolio = getPortfolio();
+    if (!portfolio.length) {
+      stocksListElement.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
+      fiisListElement.innerHTML = '<p class="empty-message">Nenhum ativo cadastrado ainda.</p>';
+      stockCountEl.textContent = '';
+      fiiCountEl.textContent = '';
+      stocksSummary.textContent = 'Adicione ativos ao clicar em "Procurar ativo".';
+      fiisSummary.textContent = '';
+      document.getElementById('metrics-row').classList.add('hidden');
+      return;
+    } else {
+      document.getElementById('metrics-row').classList.remove('hidden');
+    }
+
+    const grouped = Object.values(portfolio.reduce((acc, item) => {
+      if (!acc[item.ticker]) {
+        acc[item.ticker] = { ticker: item.ticker, items: [], totalQuantity: 0, totalCost: 0 };
+      }
+      acc[item.ticker].items.push(item);
+      acc[item.ticker].totalQuantity += item.quantity;
+      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
+      return acc;
+    }, {}));
+
+    let typeMap = {};
+    try {
+      const tickers = [...new Set(grouped.map(g => g.ticker))];
+      typeMap = await req(`/api/assets/types?tickers=${encodeURIComponent(tickers.join(','))}`);
+    } catch (e) { console.warn('Erro ao buscar tipos:', e.message); }
+
+    const stocks = grouped.filter(g => classifyTicker(g.ticker, typeMap) === 'acao');
+    const fiis = grouped.filter(g => classifyTicker(g.ticker, typeMap) !== 'acao');
+
+    const enrichedStocks = stocks.map(g => ({
+      ...g,
+      _currentPrice: getAssetCurrentPrice(g.ticker),
+      _averagePrice: g.totalQuantity ? g.totalCost / g.totalQuantity : 0,
+      _value: getAssetCurrentPrice(g.ticker) * g.totalQuantity,
+      _totalDiv: dividendReturns.get(g.ticker) || 0,
+      _costWithDiv: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0),
+      _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
+      _rentabilidade: ((getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0)) - g.totalCost,
+    }));
+    const enrichedFiis = fiis.map(g => ({
+      ...g,
+      _currentPrice: getAssetCurrentPrice(g.ticker),
+      _averagePrice: g.totalQuantity ? g.totalCost / g.totalQuantity : 0,
+      _value: getAssetCurrentPrice(g.ticker) * g.totalQuantity,
+      _totalDiv: dividendReturns.get(g.ticker) || 0,
+      _costWithDiv: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0),
+      _profitLoss: (getAssetCurrentPrice(g.ticker) * g.totalQuantity) - g.totalCost,
+      _rentabilidade: ((getAssetCurrentPrice(g.ticker) * g.totalQuantity) + (dividendReturns.get(g.ticker) || 0)) - g.totalCost,
+    }));
+
+    const totalValue = grouped.reduce((sum, group) => sum + getAssetCurrentPrice(group.ticker) * group.totalQuantity, 0);
+    const totalInvested = grouped.reduce((sum, group) => sum + group.totalCost, 0);
+    const totalWithDividends = grouped.reduce((sum, group) => {
+      const price = getAssetCurrentPrice(group.ticker);
+      return sum + (price * group.totalQuantity) + (dividendReturns.get(group.ticker) || 0);
+    }, 0);
+
+    renderGrid(enrichedStocks, stocksListElement, stockCountEl, stocksSummary);
+    renderGrid(enrichedFiis, fiisListElement, fiiCountEl, fiisSummary);
+
+    const percent = totalInvested ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(2) : 0;
+    const summaryText = `Valor total: ${formatCurrency(totalValue)}  |  Investido: ${formatCurrency(totalInvested)}  |  ${percent >= 0 ? '+' : ''}${percent}%  |  Saldo + Dividendos: ${formatCurrency(totalWithDividends)}`;
+    stocksSummary.textContent = summaryText;
+    fiisSummary.textContent = summaryText;
+    metricTotalValue.textContent = formatCurrency(totalValue);
+    metricInvested.textContent = formatCurrency(totalInvested);
+    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
+    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    metricCostDividends.textContent = formatCurrency(totalWithDividends);
+
+    openDropdowns.forEach(t => {
+      const el = findInGrids(`.three-dot-dropdown[data-ticker="${t}"]`);
+      if (el) el.classList.remove('hidden');
+    });
+    openForms.forEach(t => {
+      const el = findInGrids(`.add-launch-form[data-ticker="${t}"]`);
+      if (el) {
+        el.classList.remove('hidden');
+        const vals = openFormValues.get(t);
+        if (vals) {
+          el.querySelector('.al-quantity').value = vals.quantity;
+          el.querySelector('.al-price').value = vals.price;
+          el.querySelector('.al-date').value = vals.date;
+        }
+      }
+    });
+    openEditForms.forEach(id => {
+      const el = findInGrids(`.edit-launch-form[data-id="${id}"]`);
+      if (el) {
+        el.classList.remove('hidden');
+        const vals = openEditFormValues.get(id);
+        if (vals) {
+          el.querySelector('.el-quantity').value = vals.quantity;
+          el.querySelector('.el-price').value = vals.price;
+          el.querySelector('.el-date').value = vals.date;
+        }
+      }
+    });
+    openDetails.forEach(t => {
+      const el = findInGrids(`.grid-details[data-group="${t}"]`);
+      if (el) el.classList.remove('hidden');
+      const btn = findInGrids(`.group-toggle-button[data-group="${t}"]`);
+      if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
+    });
+    enhanceDateInputs();
+  }
+
   async function addAssetToPortfolio(ticker, quantity, purchasePrice, purchaseDate) {
     const existingPortfolio = getPortfolio();
     if (!currentUser) { alert('Você precisa estar logado.'); return; }
@@ -913,7 +962,7 @@ if (isDashboard) {
     const newPortfolio = [...existingPortfolio, saved];
     savePortfolio(newPortfolio);
     await fetchDividendReturns();
-    renderPortfolio();
+    await renderPortfolio();
     refreshPortfolioPrices();
     alert(`${ticker} cadastrado na carteira com ${quantity} unidade(s) a ${formatCurrency(purchasePrice)}.`);
   }
@@ -926,7 +975,7 @@ if (isDashboard) {
     const portfolio = getPortfolio().filter((item) => item.id !== numericId);
     savePortfolio(portfolio);
     await fetchDividendReturns();
-    renderPortfolio();
+    await renderPortfolio();
   }
 
   async function updateAssetInPortfolio(id, quantity, purchasePrice, purchaseDate) {
@@ -940,13 +989,13 @@ if (isDashboard) {
       portfolio[idx] = updated;
       savePortfolio(portfolio);
       await fetchDividendReturns();
-      renderPortfolio();
+      await renderPortfolio();
       refreshPortfolioPrices();
     } catch (err) { alert(err.message); }
   }
 
   fetchPortfolioFromServer(currentUser.id)
-    .then(async p => { savePortfolio(p); await fetchDividendReturns(); renderPortfolio(); refreshPortfolioPrices(); })
+    .then(async p => { savePortfolio(p); await fetchDividendReturns(); await renderPortfolio(); refreshPortfolioPrices(); })
     .catch(e => console.warn(e.message));
 
   // Logout
@@ -963,8 +1012,20 @@ if (isDashboard) {
     }
   });
 
+  // Section collapse/expand
+  document.querySelectorAll('.toggle-section-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = btn.dataset.section;
+      const list = section === 'stocks' ? stocksListElement : fiisListElement;
+      const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+      list.classList.toggle('hidden', isExpanded);
+      btn.setAttribute('aria-expanded', String(!isExpanded));
+      btn.textContent = isExpanded ? '+' : '−';
+    });
+  });
+
   // Portfolio list click delegation
-  portfolioListElement.addEventListener('click', async (event) => {
+  portfolioPanel.addEventListener('click', async (event) => {
     const tickerLink = event.target.closest('.ticker-link');
     if (tickerLink) {
       event.preventDefault();
@@ -976,7 +1037,7 @@ if (isDashboard) {
     const toggleButton = event.target.closest('.group-toggle-button');
     if (toggleButton) {
       const groupTicker = toggleButton.dataset.group;
-      const details = portfolioListElement.querySelector(`.grid-details[data-group="${groupTicker}"]`);
+      const details = findInGrids(`.grid-details[data-group="${groupTicker}"]`);
       if (details) {
         const isHidden = details.classList.contains('hidden');
         details.classList.toggle('hidden');
@@ -989,7 +1050,7 @@ if (isDashboard) {
     const threeDotBtn = event.target.closest('.three-dot-btn');
     if (threeDotBtn) {
       const ticker = threeDotBtn.dataset.ticker;
-      const dropdown = portfolioListElement.querySelector(`.three-dot-dropdown[data-ticker="${ticker}"]`);
+      const dropdown = findInGrids(`.three-dot-dropdown[data-ticker="${ticker}"]`);
       if (dropdown) {
         dropdown.classList.toggle('hidden');
       }
@@ -1000,13 +1061,13 @@ if (isDashboard) {
     if (addOption) {
       const ticker = addOption.dataset.ticker;
       document.querySelectorAll('.three-dot-dropdown').forEach(d => d.classList.add('hidden'));
-      const details = portfolioListElement.querySelector(`.grid-details[data-group="${ticker}"]`);
+      const details = findInGrids(`.grid-details[data-group="${ticker}"]`);
       if (details && details.classList.contains('hidden')) {
         details.classList.remove('hidden');
-        const btn = portfolioListElement.querySelector(`.group-toggle-button[data-group="${ticker}"]`);
+        const btn = findInGrids(`.group-toggle-button[data-group="${ticker}"]`);
         if (btn) { btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true'); }
       }
-      const form = portfolioListElement.querySelector(`.add-launch-form[data-ticker="${ticker}"]`);
+      const form = findInGrids(`.add-launch-form[data-ticker="${ticker}"]`);
       if (form) {
         form.classList.remove('hidden');
       }
@@ -1039,7 +1100,7 @@ if (isDashboard) {
     const editButton = event.target.closest('.edit-asset-button');
     if (editButton) {
       const id = editButton.dataset.id;
-      const form = portfolioListElement.querySelector(`.edit-launch-form[data-id="${id}"]`);
+      const form = findInGrids(`.edit-launch-form[data-id="${id}"]`);
       if (form) {
         form.classList.toggle('hidden');
       }
@@ -1108,4 +1169,5 @@ if (isDashboard) {
 
   // Auto-refresh prices
   setInterval(refreshPortfolioPrices, realTimeInterval);
+
 }
