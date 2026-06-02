@@ -55,6 +55,9 @@ document.querySelectorAll('input[name="price-source"]').forEach(r => {
 const savedUrl = localStorage.getItem('sheet-url') || '';
 document.getElementById('sheet-url').value = savedUrl;
 
+const savedApiKey = localStorage.getItem('google-api-key') || '';
+document.getElementById('google-api-key').value = savedApiKey;
+
 function toggleSheetConfig() {
   const selected = document.querySelector('input[name="price-source"]:checked').value;
   document.getElementById('sheet-config').classList.toggle('hidden', selected !== 'sheets');
@@ -68,21 +71,24 @@ toggleSheetConfig();
 // Test sheet connection
 document.getElementById('test-sheet').addEventListener('click', async () => {
   const url = document.getElementById('sheet-url').value.trim();
+  const apiKey = document.getElementById('google-api-key').value.trim();
   const status = document.getElementById('sheet-status');
   if (!url) {
     status.textContent = 'Informe a URL da planilha.';
     status.style.color = '#e74c3c';
     return;
   }
-  const exportUrl = url.includes('/export?format=csv')
+  const testUrl = url.includes('/export?format=csv')
     ? url
     : url.replace(/\/edit.*$/, '') + '/export?format=csv';
   status.textContent = 'Testando...';
   status.style.color = '#888';
   try {
-    const result = await req(`/api/quotes/sheets?url=${encodeURIComponent(exportUrl)}`);
+    const params = `url=${encodeURIComponent(testUrl)}${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`;
+    const result = await req(`/api/quotes/sheets?${params}`);
     const count = Object.keys(result).length;
-    status.textContent = `Conexão OK! ${count} ativos encontrados.`;
+    const method = apiKey ? 'API v4' : 'CSV';
+    status.textContent = `Conexão OK (${method})! ${count} ativos encontrados.`;
     status.style.color = '#27ae60';
   } catch (err) {
     status.textContent = 'Erro: ' + err.message;
@@ -94,7 +100,9 @@ document.getElementById('test-sheet').addEventListener('click', async () => {
 document.getElementById('save-settings').addEventListener('click', () => {
   const source = document.querySelector('input[name="price-source"]:checked').value;
   const sheetUrl = document.getElementById('sheet-url').value.trim();
+  const apiKey = document.getElementById('google-api-key').value.trim();
   localStorage.setItem('price-source', source);
+  localStorage.setItem('google-api-key', apiKey);
   if (source === 'sheets') {
     const exportUrl = sheetUrl.includes('/export?format=csv')
       ? sheetUrl

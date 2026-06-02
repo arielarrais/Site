@@ -89,7 +89,16 @@
               <input id="sheet-url" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." />
               <p class="small-note">Compartilhe a planilha como "Qualquer um com link pode ver" e cole o link aqui. O sistema usará a primeira aba.</p>
             </div>
-            <button id="test-sheet" class="btn btn-secondary" style="width:auto">Testar conexão</button>
+            <div class="input-group" style="margin-top:8px">
+              <label for="google-api-key">Google API Key <span class="small-note">(opcional)</span></label>
+              <input id="google-api-key" type="text" placeholder="AIzaSy..." />
+              <p class="small-note">
+                Para dados em tempo real (Google Sheets API v4). Crie em
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank">console.cloud.google.com/apis/credentials</a>,
+                habilite a Google Sheets API e gere uma API Key. Deixe em branco para usar o CSV export (mais lento).
+              </p>
+            </div>
+            <button id="test-sheet" class="btn btn-secondary" style="width:auto;margin-top:8px">Testar conexão</button>
             <span id="sheet-status" class="small-note" style="margin-left:12px"></span>
           </div>
           <button id="save-settings" class="btn btn-primary" style="width:auto;margin-top:16px">Salvar configurações</button>

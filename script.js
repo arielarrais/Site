@@ -39,6 +39,10 @@ function getSheetUrl() {
   return localStorage.getItem('sheet-url') || '';
 }
 
+function getGoogleApiKey() {
+  return localStorage.getItem('google-api-key') || '';
+}
+
 let sheetPricesCache = null;
 let sheetPricesTimestamp = 0;
 
@@ -47,7 +51,9 @@ async function refreshSheetPrices() {
   if (!url) throw new Error('URL da planilha não configurada.');
   const now = Date.now();
   if (sheetPricesCache && (now - sheetPricesTimestamp) < 60000) return;
-  const prices = await req(`/api/quotes/sheets?url=${encodeURIComponent(url)}`);
+  const apiKey = getGoogleApiKey();
+  const params = `url=${encodeURIComponent(url)}${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`;
+  const prices = await req(`/api/quotes/sheets?${params}`);
   sheetPricesCache = prices;
   sheetPricesTimestamp = now;
 }

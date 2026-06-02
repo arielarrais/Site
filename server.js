@@ -1034,6 +1034,95 @@ app.get('/api/quotes/yahoo', async (req, res) => {
 });
 
 // ===================== GOOGLE SHEETS =====================
+function parseSheetPrice(str) {
+  str = (str || '').trim().replace(/[R$\s]/g, '');
+  if (!str) return NaN;
+  const lastDot = str.lastIndexOf('.');
+  const lastComma = str.lastIndexOf(',');
+  if (lastDot > -1 && lastComma > -1) {
+    if (lastComma > lastDot) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (lastComma > -1) {
+    str = str.replace(',', '.');
+  }
+  return parseFloat(str);
+}
+
+function extractSheetId(url) {
+  const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+function extractGid(url) {
+  const m = url.match(/[?#&]gid=(\d+)/);
+  return m ? m[1] : null;
+}
+
+async function fetchSheetViaApi(spreadsheetId, apiKey, gid) {
+  // Get metadata to find sheet names
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?key=${encodeURIComponent(apiKey)}`;
+  const metaRes = await fetch(metaUrl);
+  if (!metaRes.ok) throw new Error(`Google API ${metaRes.status}: ${(await metaRes.text()).slice(0, 200)}`);
+  const meta = await metaRes.json();
+
+  // Find target sheet by gid or use first
+  let sheet = meta.sheets?.[0];
+  if (gid && meta.sheets) {
+    sheet = meta.sheets.find(s => String(s.properties?.sheetId) === gid) || sheet;
+  }
+  const sheetName = sheet?.properties?.title;
+  if (!sheetName) throw new Error('Nenhuma aba encontrada na planilha.');
+
+  // Fetch values
+  const range = `${encodeURIComponent(sheetName)}!A:Z`;
+  const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}?key=${encodeURIComponent(apiKey)}`;
+  const dataRes = await fetch(dataUrl);
+  if (!dataRes.ok) throw new Error(`Google API ${dataRes.status}: ${(await dataRes.text()).slice(0, 200)}`);
+  const data = await dataRes.json();
+  return data.values || [];
+}
+
+async function fetchSheetCSV(csvUrl) {
+  const response = await fetch(csvUrl);
+  const csv = await response.text();
+  return csv.split('\n').filter(l => l.trim());
+}
+
+function parseSheetRows(lines) {
+  if (!lines.length) return [];
+  const headerLine = lines[0];
+  let sep = ',';
+  for (const s of [',', ';', '\t']) {
+    if (headerLine.split(s).length >= 3) { sep = s; break; }
+  }
+  const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+  const fundosIdx = headers.findIndex(h =>
+    h.toUpperCase().includes('FUNDO') || h.toUpperCase() === 'TICKER' || h.toUpperCase() === 'ATIVO' || h.toUpperCase() === 'AÇÃO' || h.toUpperCase() === 'ACAO'
+  );
+  const precoIdx = headers.findIndex(h =>
+    h.toUpperCase().includes('PREÇO') || h.toUpperCase().includes('PRECO') || h.toUpperCase().includes('ATUAL')
+  );
+  if (fundosIdx < 0 || precoIdx < 0) {
+    throw new Error('Colunas FUNDOS e PREÇO ATUAL não encontradas na planilha.');
+  }
+  const prices = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    const ticker = cols[fundosIdx]?.trim().toUpperCase();
+    if (!ticker) continue;
+    const priceStr = cols[precoIdx]?.trim();
+    if (!priceStr) continue;
+    const price = parseSheetPrice(priceStr);
+    if (!isNaN(price) && price > 0) {
+      prices[ticker] = { ticker, price, name: ticker, changePercent: null, time: null };
+    }
+  }
+  return prices;
+}
+
 const sheetPriceCache = { data: null, timestamp: 0, url: '' };
 
 app.get('/api/quotes/sheets', async (req, res) => {
@@ -1046,42 +1135,30 @@ app.get('/api/quotes/sheets', async (req, res) => {
   }
 
   try {
-    const response = await fetch(url);
-    const csv = await response.text();
+    const apiKey = req.query.key || process.env.GOOGLE_API_KEY || '';
+    let prices = {};
 
-    let lines = csv.split('\n').filter(l => l.trim());
-    if (!lines.length) return res.status(500).json({ error: 'Planilha vazia.' });
-
-    const headerLine = lines[0];
-    let sep = ',';
-    for (const s of [',', ';', '\t']) {
-      if (headerLine.split(s).length >= 3) { sep = s; break; }
-    }
-
-    const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
-    const fundosIdx = headers.findIndex(h =>
-      h.toUpperCase().includes('FUNDO') || h.toUpperCase() === 'TICKER' || h.toUpperCase() === 'ATIVO' || h.toUpperCase() === 'AÇÃO' || h.toUpperCase() === 'ACAO'
-    );
-    const precoIdx = headers.findIndex(h =>
-      h.toUpperCase().includes('PREÇO') || h.toUpperCase().includes('PRECO') || h.toUpperCase().includes('ATUAL')
-    );
-
-    if (fundosIdx < 0 || precoIdx < 0) {
-      return res.status(500).json({ error: 'Colunas FUNDOS e PREÇO ATUAL não encontradas na planilha.' });
-    }
-
-    const prices = {};
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
-      const ticker = cols[fundosIdx]?.trim().toUpperCase();
-      let priceStr = cols[precoIdx]?.trim();
-      if (!ticker || !priceStr) continue;
-
-      priceStr = priceStr.replace(/\./g, '').replace(',', '.');
-      const price = parseFloat(priceStr);
-      if (!isNaN(price) && price > 0) {
-        prices[ticker] = { ticker, price, name: ticker, changePercent: null, time: null };
+    // Tenta Google Sheets API v4 se tiver key
+    if (apiKey) {
+      const sheetId = extractSheetId(url);
+      if (sheetId) {
+        const gid = extractGid(url);
+        try {
+          const values = await fetchSheetViaApi(sheetId, apiKey, gid);
+          prices = parseSheetRows(values.map(r => r.join('\t')));
+        } catch (e) {
+          console.warn('Google API falhou, tentando CSV:', e.message);
+        }
       }
+    }
+
+    // Fallback CSV
+    if (!Object.keys(prices).length) {
+      const csvUrl = url.includes('/export?format=csv')
+        ? url
+        : url.replace(/\/edit.*$/, '') + '/export?format=csv';
+      const lines = await fetchSheetCSV(csvUrl);
+      prices = parseSheetRows(lines);
     }
 
     sheetPriceCache.data = prices;
