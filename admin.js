@@ -145,6 +145,7 @@ function renderTable(tbodyId, assets) {
   tbody.innerHTML = assets.map(a => {
     const actions = isAdmin
       ? `
+        <button class="btn-fetch-dividends" data-ticker="${a.ticker}" title="Buscar dividendos na web">🌐</button>
         <button class="btn-register-dividend" data-id="${a.id}" data-ticker="${a.ticker}" data-name="${a.name}">
           + Dividendo
         </button>
@@ -192,6 +193,20 @@ function onTableClick(e) {
     req(`/api/admin/sync-brapi?ticker=${encodeURIComponent(ticker)}`)
       .then(() => { loadAssets(); })
       .catch(err => { alert('Erro: ' + err.message); loadAssets(); });
+    return;
+  }
+  const fetchDivBtn = e.target.closest('.btn-fetch-dividends');
+  if (fetchDivBtn) {
+    const ticker = fetchDivBtn.dataset.ticker;
+    fetchDivBtn.textContent = '...';
+    req('/api/admin/fetch-dividends', 'POST', { ticker })
+      .then(r => {
+        alert(`${r.inserted} dividendos novos inseridos, ${r.skipped} ignorados.`);
+        fetchDivBtn.textContent = '🌐';
+        loadAssets();
+      })
+      .catch(err => { alert('Erro: ' + err.message); fetchDivBtn.textContent = '🌐'; });
+    return;
   }
 }
 

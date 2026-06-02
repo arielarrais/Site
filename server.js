@@ -854,6 +854,110 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
   }
 });
 
+app.post('/api/admin/fetch-dividends', async (req, res) => {
+  const ticker = (req.body.ticker || '').trim().toUpperCase();
+  if (!ticker) return res.status(400).json({ error: 'Ticker é obrigatório.' });
+  try {
+    const assetResult = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [ticker]);
+    if (!assetResult.rows.length) return res.status(404).json({ error: 'Ativo não encontrado no banco.' });
+    const assetId = assetResult.rows[0].id;
+
+    const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    let dividends = [];
+
+    // Tenta Yahoo primeiro
+    try {
+      const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}.SA?interval=1d&range=5y&events=div`;
+      const yRes = await fetch(yUrl, { headers: { 'User-Agent': YAHOO_UA } });
+      if (yRes.ok) {
+        const yData = await yRes.json();
+        const divs = yData?.chart?.result?.[0]?.events?.dividends;
+        if (divs) {
+          dividends = Object.entries(divs).map(([ts, v]) => ({
+            comDate: new Date(v.date * 1000).toISOString().slice(0, 10),
+            paymentDate: null,
+            grossAmount: v.amount,
+            type: 'rendimento'
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Yahoo dividends fail:', ticker, e.message);
+    }
+
+    // Se Yahoo não achou, tenta StatusInvest
+    if (!dividends.length) {
+      const statusPaths = ['fiinfras', 'fiis', 'acoes'];
+      for (const path of statusPaths) {
+        console.log(`Fetch-dividends: scraping StatusInvest/${path} para`, ticker);
+        const url = `https://statusinvest.com.br/${path}/${ticker.toLowerCase()}`;
+        const sRes = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
+        if (!sRes.ok) {
+          console.warn(`  StatusInvest/${path}: ${sRes.status}`);
+          continue;
+        }
+        const html = await sRes.text();
+        const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+        let found = false;
+        for (const row of rows) {
+          if (!row.includes('Rendimento') && !row.includes('Amortiza')) continue;
+          found = true;
+          const type = row.includes('Amortiza') ? 'amortizacao' : 'rendimento';
+          const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+          if (!tds || tds.length < 3) continue;
+          const comDateRaw = tds[1].replace(/<[^>]+>/g, '').trim();
+          const payDateRaw = tds[2].replace(/<[^>]+>/g, '').trim();
+          const valueRaw = tds[3].replace(/<[^>]+>/g, '').trim();
+
+          const parseBRDate = (s) => {
+            const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+          };
+          const value = parseFloat(valueRaw.replace(',', '.'));
+          if (!value || value <= 0) continue;
+          dividends.push({
+            comDate: parseBRDate(comDateRaw),
+            paymentDate: parseBRDate(payDateRaw),
+            grossAmount: value,
+            type
+          });
+        }
+        if (found) break; // achou tabela, para de tentar outros paths
+      }
+    }
+
+    // Insere no banco
+    let inserted = 0;
+    let skipped = 0;
+    for (const d of dividends) {
+      if (!d.comDate && !d.paymentDate) { skipped++; continue; }
+      // Verifica se já existe (mesmo asset, mesma data COM, mesmo valor)
+      const existing = await pool.query(
+        `SELECT id FROM asset_dividends
+         WHERE assetid = $1 AND comdate = $2 AND grossamount = $3 AND type = $4`,
+        [assetId, d.comDate, d.grossAmount, d.type]
+      );
+      if (existing.rows.length) { skipped++; continue; }
+      try {
+        await pool.query(
+          `INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, type)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [assetId, d.comDate, d.paymentDate || d.comDate, d.grossAmount, d.type]
+        );
+        inserted++;
+      } catch (e) {
+        console.error(`Erro inserindo dividendo ${ticker} ${d.comDate}:`, e.message);
+        skipped++;
+      }
+    }
+
+    res.json({ ticker, inserted, skipped, total: dividends.length });
+  } catch (err) {
+    console.error('Erro fetch-dividends:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/admin/sync-dividends', async (req, res) => {
   try {
     res.json({ message: 'Sincronização de dividendos iniciada em segundo plano.' });

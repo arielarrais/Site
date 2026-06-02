@@ -944,6 +944,24 @@ input:focus {
   background: #f0f0ff;
 }
 
+.btn-fetch-dividends {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+}
+
+.btn-fetch-dividends:hover {
+  background: #f0fdf4;
+}
+
 /* ===================== SIDEBAR ===================== */
 body.with-sidebar {
   display: block;
