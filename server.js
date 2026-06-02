@@ -682,7 +682,11 @@ app.get('/api/quote/yahoo', async (req, res) => {
   try {
     const yahooTicker = ticker.includes('.') ? ticker : `${ticker}.SA`;
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
     const data = await response.json();
     const meta = data?.chart?.result?.[0]?.meta;
 
@@ -711,7 +715,11 @@ app.get('/api/quotes/yahoo', async (req, res) => {
     const results = await Promise.allSettled(tickers.map(async ticker => {
       const yahooTicker = ticker.includes('.') ? ticker : `${ticker}.SA`;
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
       const data = await response.json();
       const meta = data?.chart?.result?.[0]?.meta;
       return { ticker, price: meta?.regularMarketPrice != null ? Number(meta.regularMarketPrice) : null };
