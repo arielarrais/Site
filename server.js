@@ -855,7 +855,8 @@ app.get('/api/quote/yahoo', async (req, res) => {
       price: Number(meta.regularMarketPrice),
       name: meta.symbol || ticker,
       changePercent: null,
-      time: null
+      time: null,
+      instrumentType: meta.instrumentType || null
     });
   } catch (error) {
     console.error('Erro ao buscar cotação Yahoo:', error);

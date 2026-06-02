@@ -647,8 +647,19 @@ if (isDashboard) {
     });
   }
 
-  function classifyTicker(ticker, typeMap) {
+  async function classifyTicker(ticker, typeMap) {
     if (typeMap[ticker]) return typeMap[ticker];
+    try {
+      const result = await req(`/api/quote/yahoo?ticker=${encodeURIComponent(ticker)}`);
+      if (result && result.instrumentType) {
+        if (result.instrumentType === 'ETF' || result.instrumentType === 'FUND') return 'fii';
+        if (result.instrumentType === 'EQUITY') return 'acao';
+      }
+      if (result && result.name) {
+        const lc = result.name.toLowerCase();
+        if (lc.includes('fii') || lc.includes('fundo')) return 'fii';
+      }
+    } catch {}
     return 'acao';
   }
 
@@ -873,8 +884,12 @@ if (isDashboard) {
       typeMap = await req(`/api/assets/types?tickers=${encodeURIComponent(tickers.join(','))}`);
     } catch (e) { console.warn('Erro ao buscar tipos:', e.message); }
 
-    const stocks = grouped.filter(g => classifyTicker(g.ticker, typeMap) === 'acao');
-    const fiis = grouped.filter(g => classifyTicker(g.ticker, typeMap) !== 'acao');
+    const stocks = [];
+    const fiis = [];
+    for (const g of grouped) {
+      const type = await classifyTicker(g.ticker, typeMap);
+      if (type === 'acao') stocks.push(g); else fiis.push(g);
+    }
 
     const enrichedStocks = stocks.map(g => ({
       ...g,
