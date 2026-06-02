@@ -649,7 +649,6 @@ if (isDashboard) {
 
   function classifyTicker(ticker, typeMap) {
     if (typeMap[ticker]) return typeMap[ticker];
-    if (ticker.endsWith('11')) return 'fii';
     return 'acao';
   }
 
