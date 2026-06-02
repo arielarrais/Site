@@ -360,13 +360,19 @@ input:focus {
   gap: 8px;
 }
 
+.asset-search-form .input-group {
+  margin-bottom: 0;
+}
+
 .asset-search-form button {
   width: auto;
   justify-self: start;
   margin: 0;
+  padding: 12px 20px;
 }
 
 .search-result {
+  margin-top: 12px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #f8f9ff;
@@ -427,7 +433,7 @@ input:focus {
 }
 
 .buy-form .btn-buy {
-  width: auto;
+  width: 90px;
   padding: 6px 14px;
   font-size: 13px;
   margin: 17px 0 0;
