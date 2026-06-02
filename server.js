@@ -448,6 +448,9 @@ app.get('/api/assets/types', async (req, res) => {
           }
         } catch (yErr) {
           console.warn(`Auto-create types falhou para ${t}:`, yErr.message);
+          if (t.endsWith('11')) {
+            map[t] = 'fii';
+          }
         }
       }
     }

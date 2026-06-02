@@ -666,6 +666,7 @@ if (isDashboard) {
         if (lc.includes('fii') || lc.includes('fundo')) return 'fii';
       }
     } catch {}
+    if (ticker.endsWith('11')) return 'fii';
     return 'acao';
   }
 
