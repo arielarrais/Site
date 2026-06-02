@@ -808,16 +808,37 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
     const data = await response.json();
     const quote = data?.results?.[0];
     if (!quote || quote.regularMarketPrice == null) {
-      return res.status(404).json({ error: 'Ativo não encontrado na Brapi.' });
+      throw new Error('Brapi fora do ar ou sem dados');
     }
     await pool.query(
       `UPDATE b3_assets SET name = $1, longname = $2, logourl = $3, regularmarketprice = $4 WHERE ticker = $5`,
       [quote.shortName || ticker, quote.longName || null, quote.logourl || null, String(quote.regularMarketPrice || ''), ticker]
     );
-    res.json({ ticker, name: quote.shortName, longName: quote.longName, price: quote.regularMarketPrice });
-  } catch (error) {
-    console.error('Erro ao sincronizar com Brapi:', error);
-    res.status(500).json({ error: 'Erro ao consultar Brapi.' });
+    return res.json({ ticker, name: quote.shortName, longName: quote.longName, price: quote.regularMarketPrice });
+  } catch (brapiErr) {
+    console.warn('Brapi falhou, tentando Yahoo:', brapiErr.message);
+    try {
+      const yahooTicker = ticker.includes('.') ? ticker : `${ticker}.SA`;
+      const yRes = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`,
+        { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+      );
+      const yData = await yRes.json();
+      const yMeta = yData?.chart?.result?.[0]?.meta;
+      if (!yMeta || yMeta.regularMarketPrice == null) {
+        return res.status(404).json({ error: 'Ativo não encontrado no Yahoo Finance.' });
+      }
+      const name = String(yMeta.shortName || yMeta.symbol || ticker).substring(0, 255);
+      const longName = yMeta.longName ? String(yMeta.longName).substring(0, 255) : null;
+      await pool.query(
+        'UPDATE b3_assets SET name = $1, longname = $2, regularmarketprice = $3 WHERE ticker = $4',
+        [name, longName, String(yMeta.regularMarketPrice || ''), ticker]
+      );
+      res.json({ ticker, name, longName, price: yMeta.regularMarketPrice });
+    } catch (yahooErr) {
+      console.error('Yahoo tambem falhou:', yahooErr.message);
+      res.status(500).json({ error: 'Brapi e Yahoo indisponiveis.' });
+    }
   }
 });
 

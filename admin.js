@@ -148,7 +148,7 @@ function renderTable(tbodyId, assets) {
         <button class="btn-register-dividend" data-id="${a.id}" data-ticker="${a.ticker}" data-name="${a.name}">
           + Dividendo
         </button>
-        <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar com Brapi">⟳</button>`
+        <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar">⟳</button>`
       : '';
     const fiitype = a.fiitype ? a.fiitype.charAt(0).toUpperCase() + a.fiitype.slice(1) : '—';
     return `
@@ -255,7 +255,7 @@ document.getElementById('sync-all-button').addEventListener('click', async () =>
   } catch (err) {
     alert('Erro: ' + err.message);
   }
-  btn.textContent = 'Sync Brapi';
+  btn.textContent = 'Sincronizar';
 });
 
 async function showDividendHistory(ticker) {
