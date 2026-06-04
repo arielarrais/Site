@@ -1,13 +1,22 @@
 ﻿require('dotenv').config();
 
 const express = require('express');
+
 const path = require('path');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const { syncAllDividends } = require('./fetch_dividendos');
+const XLSX = require('xlsx');
+const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// Test endpoint to verify server is running latest code
+app.get('/api/test', (req, res) => {
+  res.json({ status: 'ok', version: 2 });
+});
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -16,13 +25,16 @@ if (!databaseUrl) {
 }
 const pool = new Pool({ connectionString: databaseUrl });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+app.get('/lancamentos', (req, res) => {
+  res.sendFile(path.join(__dirname, 'lancamentos.html'));
 });
 
 app.use(express.static(path.join(__dirname)));
@@ -48,7 +60,9 @@ async function initDb() {
       ticker TEXT,
       quantity INTEGER,
       purchaseprice DOUBLE PRECISION,
-      purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+      purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+      institution TEXT DEFAULT '',
+      movement_type TEXT DEFAULT 'compra'
     )
   `);
 
@@ -130,11 +144,11 @@ async function migrateB3AssetsTableIfNeeded() {
 }
 
 async function migratePortfolioTableIfNeeded() {
-  const { rows } = await pool.query(`
+  const { rows: colRows } = await pool.query(`
     SELECT column_name FROM information_schema.columns
     WHERE table_name = 'portfolio_items' AND column_name = 'purchasedate'
   `);
-  if (rows.length > 0) {
+  if (colRows.length > 0) {
     await pool.query('DROP TABLE IF EXISTS portfolio_items_new');
     await pool.query(`
       CREATE TABLE portfolio_items_new (
@@ -143,17 +157,34 @@ async function migratePortfolioTableIfNeeded() {
         ticker TEXT,
         quantity INTEGER,
         purchaseprice DOUBLE PRECISION,
-        purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        purchasedat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+        institution TEXT DEFAULT ''
       )
     `);
     await pool.query(`
-      INSERT INTO portfolio_items_new (id, userid, ticker, quantity, purchaseprice, purchasedat)
-      SELECT id, userid, ticker, quantity, purchaseprice, purchasedat FROM portfolio_items
+      INSERT INTO portfolio_items_new (id, userid, ticker, quantity, purchaseprice, purchasedat, institution)
+      SELECT id, userid, ticker, quantity, purchaseprice, purchasedat, '' FROM portfolio_items
     `);
     await pool.query('DROP TABLE portfolio_items');
     await pool.query('ALTER TABLE portfolio_items_new RENAME TO portfolio_items');
     await pool.query("SELECT setval('portfolio_items_id_seq', (SELECT COALESCE(MAX(id),1) FROM portfolio_items))");
     console.log('Tabela portfolio_items migrada para permitir lançamentos duplicados.');
+  }
+  const { rows: instRows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'portfolio_items' AND column_name = 'institution'
+  `);
+  if (instRows.length === 0) {
+    await pool.query("ALTER TABLE portfolio_items ADD COLUMN institution TEXT DEFAULT ''");
+    console.log('Coluna institution adicionada em portfolio_items.');
+  }
+  const { rows: mtRows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'portfolio_items' AND column_name = 'movement_type'
+  `);
+  if (mtRows.length === 0) {
+    await pool.query("ALTER TABLE portfolio_items ADD COLUMN movement_type TEXT DEFAULT 'compra'");
+    console.log('Coluna movement_type adicionada em portfolio_items.');
   }
 }
 
@@ -230,7 +261,7 @@ app.get('/api/portfolio', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      'SELECT id, ticker, quantity, purchaseprice AS "purchasePrice", purchasedat AS "purchasedAt" FROM portfolio_items WHERE userid = $1 ORDER BY purchasedat ASC, id ASC',
+      'SELECT id, ticker, quantity, purchaseprice AS "purchasePrice", purchasedat AS "purchasedAt", institution, movement_type AS "movementType" FROM portfolio_items WHERE userid = $1 ORDER BY purchasedat ASC, id ASC',
       [userId]
     );
     res.json(rows);
@@ -271,57 +302,61 @@ app.get('/api/portfolio/dividend-returns', async (req, res) => {
 });
 
 app.post('/api/portfolio', async (req, res) => {
-  const { userId, ticker, quantity, purchasePrice, purchaseDate } = req.body;
-  if (!userId || !ticker || !quantity || !purchasePrice || !purchaseDate) {
-    return res.status(400).json({ error: 'userId, ticker, quantidade, preço de compra e data são obrigatórios.' });
+  const { userId, ticker, quantity, purchasePrice, purchaseDate, institution, movementType } = req.body;
+  if (!userId || !ticker || quantity === undefined || quantity === null || purchasePrice === undefined || purchasePrice === null || !purchaseDate) {
+    return res.status(400).json({ error: 'userId, ticker, quantidade, preço e data são obrigatórios.' });
   }
 
   const normalizedTicker = String(ticker).trim().toUpperCase();
   const qty = Number(quantity);
   const price = Number(purchasePrice);
   const purchaseDateValue = String(purchaseDate).trim();
+  const inst = institution ? String(institution).trim() : '';
+  const movType = movementType || 'compra';
 
-  if (qty <= 0 || price <= 0) {
-    return res.status(400).json({ error: 'Quantidade e preço devem ser maiores que zero.' });
+  if (qty === 0) {
+    return res.status(400).json({ error: 'Quantidade deve ser diferente de zero.' });
   }
 
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(purchaseDateValue)) {
-    return res.status(400).json({ error: 'Data de compra deve estar no formato YYYY-MM-DD.' });
+    return res.status(400).json({ error: 'Data deve estar no formato YYYY-MM-DD.' });
   }
 
   try {
-    const exists = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [normalizedTicker]);
-    if (exists.rows.length === 0) {
-      try {
-        const yahooTicker = normalizedTicker.includes('.') ? normalizedTicker : `${normalizedTicker}.SA`;
-        const yRes = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`,
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
-        );
-        const yData = await yRes.json();
-        const yMeta = yData?.chart?.result?.[0]?.meta;
-        if (yMeta) {
-          const name = String(yMeta.shortName || yMeta.symbol || normalizedTicker).substring(0, 255);
-          const longName = yMeta.longName ? String(yMeta.longName).substring(0, 255) : null;
-          let assettype = 'acao';
-          if (normalizedTicker.endsWith('11')) assettype = 'fii';
-          else if (yMeta.instrumentType === 'ETF' || yMeta.instrumentType === 'FUND') assettype = 'fii';
-          await pool.query(
-            'INSERT INTO b3_assets (ticker, name, longname, assettype) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker) DO NOTHING',
-            [normalizedTicker, name, longName, assettype]
+    if (qty > 0 && price > 0) {
+      const exists = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [normalizedTicker]);
+      if (exists.rows.length === 0) {
+        try {
+          const yahooTicker = normalizedTicker.includes('.') ? normalizedTicker : `${normalizedTicker}.SA`;
+          const yRes = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&range=1d`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
           );
+          const yData = await yRes.json();
+          const yMeta = yData?.chart?.result?.[0]?.meta;
+          if (yMeta) {
+            const name = String(yMeta.shortName || yMeta.symbol || normalizedTicker).substring(0, 255);
+            const longName = yMeta.longName ? String(yMeta.longName).substring(0, 255) : null;
+            let assettype = 'acao';
+            if (normalizedTicker.endsWith('11')) assettype = 'fii';
+            else if (yMeta.instrumentType === 'ETF' || yMeta.instrumentType === 'FUND') assettype = 'fii';
+            await pool.query(
+              'INSERT INTO b3_assets (ticker, name, longname, assettype) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker) DO NOTHING',
+              [normalizedTicker, name, longName, assettype]
+            );
+          }
+        } catch (yErr) {
+          console.warn('Auto-create falhou ao cadastrar compra:', yErr.message);
         }
-      } catch (yErr) {
-        console.warn('Auto-create falhou ao cadastrar compra:', yErr.message);
       }
     }
 
     const result = await pool.query(
-      'INSERT INTO portfolio_items (userid, ticker, quantity, purchaseprice, purchasedat) VALUES ($1, $2, $3, $4, $5) RETURNING id, ticker, quantity, purchaseprice, purchasedat',
-      [userId, normalizedTicker, qty, price, purchaseDateValue]
+      'INSERT INTO portfolio_items (userid, ticker, quantity, purchaseprice, purchasedat, institution, movement_type) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, ticker, quantity, purchaseprice, purchasedat, institution, movement_type',
+      [userId, normalizedTicker, qty, price, purchaseDateValue, inst, movType]
     );
     const item = result.rows[0];
-    res.json({ id: item.id, ticker: item.ticker, quantity: item.quantity, purchasePrice: item.purchaseprice, purchaseDate: item.purchasedat });
+    res.json({ id: item.id, ticker: item.ticker, quantity: item.quantity, purchasePrice: item.purchaseprice, purchaseDate: item.purchasedat, institution: item.institution, movementType: item.movement_type });
   } catch (err) {
     console.error('Erro ao inserir item na carteira:', err);
     res.status(500).json({ error: 'Erro ao salvar item da carteira.' });
@@ -338,11 +373,8 @@ app.put('/api/portfolio', async (req, res) => {
   const price = purchasePrice != null ? Number(purchasePrice) : null;
   const date = purchaseDate ? String(purchaseDate).trim() : null;
 
-  if (qty != null && qty <= 0) {
-    return res.status(400).json({ error: 'Quantidade deve ser maior que zero.' });
-  }
-  if (price != null && price <= 0) {
-    return res.status(400).json({ error: 'Preço deve ser maior que zero.' });
+  if (qty != null && qty === 0) {
+    return res.status(400).json({ error: 'Quantidade deve ser diferente de zero.' });
   }
   if (date != null && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) {
     return res.status(400).json({ error: 'Data deve estar no formato YYYY-MM-DD.' });
@@ -1172,6 +1204,85 @@ app.get('/api/quotes/sheets', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar planilha:', error);
     res.status(500).json({ error: 'Erro ao buscar preços da planilha.' });
+  }
+});
+
+// ===================== B3 XLSX IMPORT =====================
+app.post('/api/portfolio/parse-b3-xlsx', async (req, res) => {
+  const { userId, fileBase64 } = req.body;
+  if (!userId || !fileBase64) {
+    return res.status(400).json({ error: 'userId e fileBase64 são obrigatórios.' });
+  }
+
+  let tmpPath;
+  try {
+    const buf = Buffer.from(fileBase64, 'base64');
+    tmpPath = path.join(os.tmpdir(), `b3-${Date.now()}.xlsx`);
+    fs.writeFileSync(tmpPath, buf);
+    const wb = XLSX.readFile(tmpPath);
+    const sheet = wb.Sheets['Movimentação'];
+    if (!sheet) return res.status(400).json({ error: 'Planilha não contém a aba "Movimentação".' });
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const assets = [];
+    const positions = {};
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const entry = String(r[0] || '').trim();
+      const dateRaw = String(r[1] || '').trim();
+      const mov = String(r[2] || '').trim();
+      const prod = String(r[3] || '').trim();
+      const inst = String(r[4] || '').trim();
+      const qty = Number(r[5] || 0);
+      const price = Number(String(r[6] || '0').replace(',', '.'));
+      const ticker = prod.split(' - ')[0].trim();
+      if (!ticker || ticker.length < 4 || ticker === '-' || qty <= 0) continue;
+
+      if (!positions[ticker]) positions[ticker] = { quantity: 0, totalCost: 0 };
+      const p = positions[ticker];
+      const date = dateRaw ? dateRaw.split('/').reverse().join('-') : new Date().toISOString().split('T')[0];
+
+      if (mov === 'Transferência - Liquidação' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: price, purchaseDate: date, institution: inst, movementType: 'compra' });
+        p.quantity += qty;
+        p.totalCost += qty * price;
+      } else if (mov === 'Transferência - Liquidação' && entry === 'Debito') {
+        const avgPrice = p.quantity > 0 ? Math.round((p.totalCost / p.quantity) * 100) / 100 : 0;
+        assets.push({ ticker, quantity: -qty, purchasePrice: avgPrice, purchaseDate: date, institution: inst, movementType: 'venda' });
+        p.quantity -= qty;
+        p.totalCost -= qty * avgPrice;
+      } else if (mov === 'Transferência' && entry === 'Debito') {
+        assets.push({ ticker, quantity: -qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'venda' });
+        if (p.quantity > 0) p.quantity -= qty;
+      } else if (mov === 'Bonificação em Ativos' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'bonificacao' });
+        p.quantity += qty;
+      } else if (mov === 'Desdobro' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'desdobro' });
+        p.quantity += qty;
+      } else if (mov === 'Grupamento' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'grupamento' });
+        p.quantity += qty;
+      } else if (mov === 'Incorporação' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'incorporacao' });
+        p.quantity += qty;
+      } else if (mov === 'Fração em Ativos' && entry === 'Debito') {
+        assets.push({ ticker, quantity: -qty, purchasePrice: 0, purchaseDate: date, institution: inst, movementType: 'fracao' });
+        if (p.quantity > 0) p.quantity -= qty;
+      } else if (mov === 'Leilão de Fração' && entry === 'Credito') {
+        assets.push({ ticker, quantity: qty, purchasePrice: price, purchaseDate: date, institution: inst, movementType: 'leilao' });
+        p.quantity += qty;
+        p.totalCost += qty * price;
+      }
+    }
+
+    assets.sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate) || a.ticker.localeCompare(b.ticker));
+    res.json({ assets });
+  } catch (err) {
+    console.error('Erro ao processar XLSX B3:', err);
+    res.status(500).json({ error: 'Erro ao processar arquivo: ' + err.message, assets: [] });
+  } finally {
+    if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (e) {}
   }
 });
 

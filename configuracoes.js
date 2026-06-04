@@ -47,70 +47,144 @@ document.getElementById('logout-button').addEventListener('click', () => {
 });
 
 // Load saved settings
-const savedSource = localStorage.getItem('price-source') || 'brapi';
+const savedSource = localStorage.getItem('price-source') || 'sheets';
 document.querySelectorAll('input[name="price-source"]').forEach(r => {
   r.checked = r.value === savedSource;
-});
-
-const savedUrl = localStorage.getItem('sheet-url') || '';
-document.getElementById('sheet-url').value = savedUrl;
-
-const savedApiKey = localStorage.getItem('google-api-key') || '';
-document.getElementById('google-api-key').value = savedApiKey;
-
-function toggleSheetConfig() {
-  const selected = document.querySelector('input[name="price-source"]:checked').value;
-  document.getElementById('sheet-config').classList.toggle('hidden', selected !== 'sheets');
-}
-
-document.querySelectorAll('input[name="price-source"]').forEach(r => {
-  r.addEventListener('change', toggleSheetConfig);
-});
-toggleSheetConfig();
-
-// Test sheet connection
-document.getElementById('test-sheet').addEventListener('click', async () => {
-  const url = document.getElementById('sheet-url').value.trim();
-  const apiKey = document.getElementById('google-api-key').value.trim();
-  const status = document.getElementById('sheet-status');
-  if (!url) {
-    status.textContent = 'Informe a URL da planilha.';
-    status.style.color = '#e74c3c';
-    return;
-  }
-  const testUrl = url.includes('/export?format=csv')
-    ? url
-    : url.replace(/\/edit.*$/, '') + '/export?format=csv';
-  status.textContent = 'Testando...';
-  status.style.color = '#888';
-  try {
-    const params = `url=${encodeURIComponent(testUrl)}${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`;
-    const result = await req(`/api/quotes/sheets?${params}`);
-    const count = Object.keys(result).length;
-    const method = apiKey ? 'API v4' : 'CSV';
-    status.textContent = `Conexão OK (${method})! ${count} ativos encontrados.`;
-    status.style.color = '#27ae60';
-  } catch (err) {
-    status.textContent = 'Erro: ' + err.message;
-    status.style.color = '#e74c3c';
-  }
 });
 
 // Save settings
 document.getElementById('save-settings').addEventListener('click', () => {
   const source = document.querySelector('input[name="price-source"]:checked').value;
-  const sheetUrl = document.getElementById('sheet-url').value.trim();
-  const apiKey = document.getElementById('google-api-key').value.trim();
   localStorage.setItem('price-source', source);
-  localStorage.setItem('google-api-key', apiKey);
-  if (source === 'sheets') {
-    const exportUrl = sheetUrl.includes('/export?format=csv')
-      ? sheetUrl
-      : sheetUrl.replace(/\/edit.*$/, '') + '/export?format=csv';
-    localStorage.setItem('sheet-url', exportUrl);
-  }
   const status = document.getElementById('save-status');
   status.textContent = 'Configurações salvas com sucesso!';
   status.style.color = '#27ae60';
   setTimeout(() => { status.textContent = ''; }, 3000);
+});
+
+// === B3 XLSX Import ===
+const b3xlsxFileInput = document.getElementById('b3xlsx-file-input');
+const b3xlsxDropzone = document.getElementById('b3xlsx-dropzone');
+const b3xlsxPreview = document.getElementById('b3xlsx-preview');
+const b3xlsxPreviewBody = document.getElementById('b3xlsx-preview-body');
+const b3xlsxPreviewCount = document.getElementById('b3xlsx-preview-count');
+const b3xlsxStatus = document.getElementById('b3xlsx-status');
+const b3xlsxImportBtn = document.getElementById('b3xlsx-import-btn');
+let b3xlsxAssets = [];
+let b3xlsxProcessing = false;
+
+b3xlsxDropzone.addEventListener('click', () => b3xlsxFileInput.click());
+
+b3xlsxDropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  b3xlsxDropzone.style.borderColor = '#1a73e8';
+  b3xlsxDropzone.style.background = '#e8f0fe';
+});
+
+b3xlsxDropzone.addEventListener('dragleave', () => {
+  b3xlsxDropzone.style.borderColor = '#ccc';
+  b3xlsxDropzone.style.background = '#fafafa';
+});
+
+b3xlsxDropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  b3xlsxDropzone.style.borderColor = '#ccc';
+  b3xlsxDropzone.style.background = '#fafafa';
+  if (e.dataTransfer.files.length > 0) processB3Xlsx(e.dataTransfer.files[0]);
+});
+
+b3xlsxFileInput.addEventListener('change', () => {
+  if (b3xlsxFileInput.files.length > 0) processB3Xlsx(b3xlsxFileInput.files[0]);
+});
+
+async function processB3Xlsx(file) {
+  if (b3xlsxProcessing) return;
+  if (!file.name.endsWith('.xlsx')) {
+    b3xlsxStatus.textContent = 'Selecione um arquivo .xlsx.';
+    b3xlsxStatus.style.color = '#e74c3c';
+    return;
+  }
+
+  b3xlsxProcessing = true;
+  b3xlsxStatus.textContent = 'Processando arquivo...';
+  b3xlsxStatus.style.color = '#666';
+
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+      reader.readAsDataURL(file);
+    });
+
+    const data = await req('/api/portfolio/parse-b3-xlsx', 'POST', {
+      userId: currentUser.id,
+      fileBase64: base64
+    });
+
+    if (data.error) {
+      b3xlsxStatus.textContent = data.error;
+      b3xlsxStatus.style.color = '#e74c3c';
+      b3xlsxProcessing = false;
+      return;
+    }
+
+    b3xlsxAssets = data.assets || [];
+    if (b3xlsxAssets.length === 0) {
+      b3xlsxStatus.textContent = 'Nenhum ativo encontrado nas movimentações.';
+      b3xlsxStatus.style.color = '#e67e22';
+      b3xlsxProcessing = false;
+      return;
+    }
+
+    let html = '';
+    b3xlsxAssets.forEach(a => {
+      const typeLabel = { 'compra': 'Compra', 'venda': 'Venda', 'bonificacao': 'Bonif', 'desdobro': 'Desdobro', 'grupamento': 'Grupamento', 'incorporacao': 'Incorp', 'fracao': 'Fração', 'leilao': 'Leilão' }[a.movementType] || a.movementType;
+      html += `<tr><td>${a.ticker}</td><td>${a.quantity}</td><td>R$ ${Number(a.purchasePrice).toFixed(2)}</td><td>${a.institution || '—'}</td><td>${typeLabel}</td></tr>`;
+    });
+    b3xlsxPreviewBody.innerHTML = html;
+    b3xlsxPreviewCount.textContent = `${b3xlsxAssets.length} ativo(s) encontrado(s).`;
+    b3xlsxPreview.style.display = '';
+    b3xlsxImportBtn.style.display = '';
+    b3xlsxStatus.textContent = 'Confira os dados e clique em importar.';
+    b3xlsxStatus.style.color = '#27ae60';
+  } catch (err) {
+    b3xlsxStatus.textContent = 'Erro: ' + (err.message || 'falha na conexão');
+    b3xlsxStatus.style.color = '#e74c3c';
+  }
+  b3xlsxProcessing = false;
+}
+
+b3xlsxImportBtn.addEventListener('click', async () => {
+  b3xlsxImportBtn.disabled = true;
+  b3xlsxImportBtn.textContent = 'Importando...';
+  try {
+    let imported = 0;
+    for (const asset of b3xlsxAssets) {
+      try {
+        await req('/api/portfolio', 'POST', {
+          userId: currentUser.id,
+          ticker: asset.ticker,
+          quantity: asset.quantity,
+          purchasePrice: asset.purchasePrice,
+          purchaseDate: asset.purchaseDate,
+          institution: asset.institution || '',
+          movementType: asset.movementType || 'compra'
+        });
+        imported++;
+      } catch (e) {
+        console.warn('Falha ao importar ' + asset.ticker + ':', e.message);
+      }
+    }
+    const total = b3xlsxAssets.length;
+    b3xlsxStatus.textContent = '';
+    b3xlsxPreview.style.display = 'none';
+    b3xlsxImportBtn.style.display = 'none';
+    b3xlsxAssets = [];
+    alert(`Importação concluída: ${imported} de ${total} ativos importados.`);
+  } catch (err) {
+    alert('Erro ao importar: ' + (err.message || 'desconhecido'));
+  }
+  b3xlsxImportBtn.disabled = false;
+  b3xlsxImportBtn.textContent = 'Importar para carteira';
 });

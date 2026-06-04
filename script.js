@@ -32,15 +32,18 @@ function formatCurrency(value) {
 }
 
 function getPriceSource() {
-  return localStorage.getItem('price-source') || 'brapi';
+  return localStorage.getItem('price-source') || 'sheets';
 }
 
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Kzhcn6A8Kmd6SqEDM87gHbyb6HoDGzxXr5vsi1pIu44/export?format=csv';
+const GOOGLE_API_KEY = 'AIzaSyCg4g-6e6HKGDfeOFABp8ClQbYzAkVaReY';
+
 function getSheetUrl() {
-  return localStorage.getItem('sheet-url') || '';
+  return SHEET_URL;
 }
 
 function getGoogleApiKey() {
-  return localStorage.getItem('google-api-key') || '';
+  return GOOGLE_API_KEY;
 }
 
 let sheetPricesCache = null;
@@ -59,7 +62,7 @@ async function refreshSheetPrices() {
 }
 
 // ===================== LOGIN PAGE =====================
-if (!isDashboard) {
+if (window.location.pathname === '/') {
   const loginCard = document.getElementById('login-card');
   const registerCard = document.getElementById('register-card');
 
@@ -191,7 +194,9 @@ if (isDashboard) {
       ticker: item.ticker,
       quantity: item.quantity,
       purchasePrice: item.purchasePrice ?? item.purchaseprice ?? item.purchaseprice,
-      purchaseDate: item.purchaseDate ?? item.purchasedAt ?? item.purchasedat ?? item.purchasdate
+      purchaseDate: item.purchaseDate ?? item.purchasedAt ?? item.purchasedat ?? item.purchasdate,
+      movementType: item.movementType || 'compra',
+      institution: item.institution || ''
     }));
   }
 
@@ -201,7 +206,9 @@ if (isDashboard) {
       ticker: item.ticker,
       quantity: item.quantity,
       purchasePrice: item.purchasePrice,
-      purchaseDate: item.purchaseDate
+      purchaseDate: item.purchaseDate,
+      institution: item.institution || '',
+      movementType: item.movementType || 'compra'
     });
   }
 
@@ -389,7 +396,7 @@ if (isDashboard) {
       acc[item.ticker].totalQuantity += item.quantity;
       acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
       return acc;
-    }, {}));
+    }, {})).filter(g => g.totalQuantity !== 0);
 
     let totalValue = 0;
     let totalInvested = 0;
@@ -883,7 +890,7 @@ if (isDashboard) {
       acc[item.ticker].totalQuantity += item.quantity;
       acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
       return acc;
-    }, {}));
+    }, {})).filter(g => g.totalQuantity !== 0);
 
     let typeMap = {};
     try {
