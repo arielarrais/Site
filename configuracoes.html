@@ -114,13 +114,42 @@
 
           <div id="b3xlsx-preview" style="display:none;max-height:350px;overflow:auto;margin-bottom:12px">
             <table class="admin-table" style="width:100%;font-size:13px">
-              <thead><tr><th>Ticker</th><th>Quantidade</th><th>Preço</th><th>Instituição</th><th>Tipo</th></tr></thead>
+              <thead><tr><th>Ticker</th><th>Quantidade</th><th>Preço</th><th>Instituição</th><th>Tipo</th><th>Data</th></tr></thead>
               <tbody id="b3xlsx-preview-body"></tbody>
             </table>
             <p id="b3xlsx-preview-count" class="small-note" style="margin:8px 0"></p>
           </div>
 
           <button type="button" id="b3xlsx-import-btn" class="btn btn-primary" style="width:auto;display:none">Importar para carteira</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card dashboard-card" style="margin-top:20px">
+      <div class="dashboard-header">
+        <h1>Gerenciar carteira</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Limpar carteira</h3>
+          <p class="small-note" style="margin-bottom:12px">Remove todos os ativos da sua carteira. Esta ação não pode ser desfeita.</p>
+          <button id="clear-portfolio-btn" class="btn btn-danger" style="width:auto">Limpar carteira</button>
+          <span id="clear-portfolio-status" class="small-note" style="margin-left:12px"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card dashboard-card" style="margin-top:20px">
+      <div class="dashboard-header">
+        <h1>Dividendos</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Sincronizar dividendos</h3>
+          <p class="small-note" style="margin-bottom:12px">Re-sincroniza todos os dividendos do banco de dados. Busca no StatusInvest (datas COM e pgto corretas) com fallback Yahoo Finance.</p>
+          <button id="sync-dividends-btn" class="btn btn-primary" style="width:auto">Sincronizar dividendos</button>
+          <span id="sync-dividends-status" class="small-note" style="margin-left:12px"></span>
+          <div id="sync-dividends-log" style="margin-top:8px;max-height:200px;overflow:auto;font-size:12px;background:#f5f5f5;padding:8px;border-radius:4px;display:none;white-space:pre-wrap;font-family:monospace"></div>
         </div>
       </div>
     </div>

@@ -108,6 +108,8 @@ async function processB3Xlsx(file) {
   b3xlsxProcessing = true;
   b3xlsxStatus.textContent = 'Processando arquivo...';
   b3xlsxStatus.style.color = '#666';
+  b3xlsxPreview.style.display = 'none';
+  b3xlsxImportBtn.style.display = 'none';
 
   try {
     const base64 = await new Promise((resolve, reject) => {
@@ -131,19 +133,22 @@ async function processB3Xlsx(file) {
 
     b3xlsxAssets = data.assets || [];
     if (b3xlsxAssets.length === 0) {
-      b3xlsxStatus.textContent = 'Nenhum ativo encontrado nas movimentações.';
+      b3xlsxStatus.textContent = 'Nenhum movimento encontrado.';
       b3xlsxStatus.style.color = '#e67e22';
       b3xlsxProcessing = false;
       return;
     }
 
     let html = '';
+    let buys = 0, sells = 0;
     b3xlsxAssets.forEach(a => {
-      const typeLabel = { 'compra': 'Compra', 'venda': 'Venda', 'bonificacao': 'Bonif', 'desdobro': 'Desdobro', 'grupamento': 'Grupamento', 'incorporacao': 'Incorp', 'fracao': 'Fração', 'leilao': 'Leilão' }[a.movementType] || a.movementType;
-      html += `<tr><td>${a.ticker}</td><td>${a.quantity}</td><td>R$ ${Number(a.purchasePrice).toFixed(2)}</td><td>${a.institution || '—'}</td><td>${typeLabel}</td></tr>`;
+      const typeLabel = a.movementType === 'compra' ? 'Compra' : 'Venda';
+      const qtyDisplay = a.quantity;
+      if (a.movementType === 'compra') buys++; else sells++;
+      html += `<tr><td><strong>${a.ticker}</strong></td><td>${qtyDisplay}</td><td>R$ ${Number(a.purchasePrice).toFixed(2)}</td><td>${a.institution || '—'}</td><td>${typeLabel}</td><td>${a.purchaseDate}</td></tr>`;
     });
     b3xlsxPreviewBody.innerHTML = html;
-    b3xlsxPreviewCount.textContent = `${b3xlsxAssets.length} ativo(s) encontrado(s).`;
+    b3xlsxPreviewCount.textContent = `${b3xlsxAssets.length} movimento(s): ${buys} compra(s), ${sells} venda(s).`;
     b3xlsxPreview.style.display = '';
     b3xlsxImportBtn.style.display = '';
     b3xlsxStatus.textContent = 'Confira os dados e clique em importar.';
@@ -181,10 +186,76 @@ b3xlsxImportBtn.addEventListener('click', async () => {
     b3xlsxPreview.style.display = 'none';
     b3xlsxImportBtn.style.display = 'none';
     b3xlsxAssets = [];
-    alert(`Importação concluída: ${imported} de ${total} ativos importados.`);
+    alert(`Importação concluída: ${imported} de ${total} movimentos importados.`);
   } catch (err) {
     alert('Erro ao importar: ' + (err.message || 'desconhecido'));
   }
   b3xlsxImportBtn.disabled = false;
   b3xlsxImportBtn.textContent = 'Importar para carteira';
+});
+
+// === Clear Portfolio ===
+document.getElementById('clear-portfolio-btn').addEventListener('click', async () => {
+  if (!confirm('Tem certeza que deseja limpar TODA a sua carteira? Esta ação não pode ser desfeita.')) return;
+  if (!confirm('ÚLTIMA CONFIRMAÇÃO: Todos os ativos serão removidos permanentemente. Deseja continuar?')) return;
+
+  const status = document.getElementById('clear-portfolio-status');
+  const btn = document.getElementById('clear-portfolio-btn');
+  btn.disabled = true;
+  status.textContent = 'Limpando...';
+  status.style.color = '#888';
+  try {
+    await req('/api/portfolio/clear', 'DELETE', { userId: currentUser.id });
+    status.textContent = 'Carteira limpa com sucesso!';
+    status.style.color = '#27ae60';
+  } catch (err) {
+    status.textContent = 'Erro: ' + (err.message || 'falha na conexão');
+    status.style.color = '#e74c3c';
+  }
+  btn.disabled = false;
+});
+
+// === Sync Dividends ===
+const syncBtn = document.getElementById('sync-dividends-btn');
+const syncStatus = document.getElementById('sync-dividends-status');
+const syncLog = document.getElementById('sync-dividends-log');
+
+syncBtn.addEventListener('click', async () => {
+  syncBtn.disabled = true;
+  syncBtn.textContent = 'Sincronizando...';
+  syncStatus.textContent = 'Buscando dividendos...';
+  syncStatus.style.color = '#888';
+  syncLog.style.display = 'block';
+  syncLog.textContent = '';
+
+  try {
+    const res = await fetch('/api/admin/sync-dividends', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao iniciar sincronização');
+
+    syncStatus.textContent = data.message;
+    syncStatus.style.color = '#27ae60';
+
+    syncLog.textContent += 'Sincronização iniciada em segundo plano.\nAguardando conclusão...\n\n';
+
+    // Poll logs (server logs to console, we simulate by checking status)
+    let elapsed = 0;
+    const poll = setInterval(async () => {
+      elapsed += 5;
+      syncLog.textContent += '.';
+      if (elapsed >= 180) {
+        clearInterval(poll);
+        syncLog.textContent += '\n\nSincronização concluída ou tempo limite atingido. Verifique o console do servidor para detalhes.';
+      }
+    }, 5000);
+
+    // Stop polling after a reasonable time
+    setTimeout(() => clearInterval(poll), 200000);
+  } catch (err) {
+    syncStatus.textContent = 'Erro: ' + (err.message || 'falha na conexão');
+    syncStatus.style.color = '#e74c3c';
+  }
+
+  syncBtn.disabled = false;
+  syncBtn.textContent = 'Sincronizar dividendos';
 });

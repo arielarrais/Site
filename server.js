@@ -899,80 +899,74 @@ app.post('/api/admin/fetch-dividends', async (req, res) => {
 
     const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     let dividends = [];
+    let source = '';
 
-    // Tenta Yahoo primeiro
-    try {
-      const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}.SA?interval=1d&range=5y&events=div`;
-      const yRes = await fetch(yUrl, { headers: { 'User-Agent': YAHOO_UA } });
-      if (yRes.ok) {
-        const yData = await yRes.json();
-        const divs = yData?.chart?.result?.[0]?.events?.dividends;
-        if (divs) {
-          dividends = Object.entries(divs).map(([ts, v]) => ({
-            comDate: new Date(v.date * 1000).toISOString().slice(0, 10),
-            paymentDate: null,
-            grossAmount: v.amount,
-            type: 'rendimento'
-          }));
-        }
+    // Tenta StatusInvest primeiro (retorna data COM e data pgto corretas)
+    const statusPaths = ['fiinfras', 'fiis', 'acoes'];
+    for (const path of statusPaths) {
+      console.log(`Fetch-dividends: scraping StatusInvest/${path} para`, ticker);
+      const siUrl = `https://statusinvest.com.br/${path}/${ticker.toLowerCase()}`;
+      const sRes = await fetch(siUrl, { headers: { 'User-Agent': YAHOO_UA } });
+      if (!sRes.ok) { console.warn(`  StatusInvest/${path}: ${sRes.status}`); continue; }
+      const html = await sRes.text();
+      const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+      let found = false;
+      for (const row of rows) {
+        const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+        if (!tds || tds.length < 4) continue;
+        const typeRaw = tds[0].replace(/<[^>]+>/g, '').trim();
+        const comDateRaw = tds[1].replace(/<[^>]+>/g, '').trim();
+        const payDateRaw = tds[2].replace(/<[^>]+>/g, '').trim();
+        const valueRaw = tds[3].replace(/<[^>]+>/g, '').trim();
+        if (!comDateRaw.match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+        const parseBRDate = (s) => {
+          const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+        };
+        const value = parseFloat(valueRaw.replace(',', '.'));
+        if (!value || value <= 0) continue;
+        found = true;
+        const type = typeRaw.toLowerCase().includes('amortiz') ? 'amortizacao' : 'rendimento';
+        dividends.push({
+          comDate: parseBRDate(comDateRaw),
+          paymentDate: parseBRDate(payDateRaw),
+          grossAmount: value,
+          type
+        });
       }
-    } catch (e) {
-      console.warn('Yahoo dividends fail:', ticker, e.message);
+      if (found) { source = 'StatusInvest'; break; }
     }
 
-    // Se Yahoo não achou, tenta StatusInvest
+    // Fallback Yahoo (só tem data COM, sem data pgto)
     if (!dividends.length) {
-      const statusPaths = ['fiinfras', 'fiis', 'acoes'];
-      for (const path of statusPaths) {
-        console.log(`Fetch-dividends: scraping StatusInvest/${path} para`, ticker);
-        const url = `https://statusinvest.com.br/${path}/${ticker.toLowerCase()}`;
-        const sRes = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
-        if (!sRes.ok) {
-          console.warn(`  StatusInvest/${path}: ${sRes.status}`);
-          continue;
+      try {
+        const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}.SA?interval=1d&range=5y&events=div`;
+        const yRes = await fetch(yUrl, { headers: { 'User-Agent': YAHOO_UA } });
+        if (yRes.ok) {
+          const yData = await yRes.json();
+          const divs = yData?.chart?.result?.[0]?.events?.dividends;
+          if (divs) {
+            dividends = Object.entries(divs).map(([ts, v]) => ({
+              comDate: new Date(v.date * 1000).toISOString().slice(0, 10),
+              paymentDate: null,
+              grossAmount: v.amount,
+              type: 'rendimento'
+            }));
+            source = 'Yahoo';
+          }
         }
-        const html = await sRes.text();
-        const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
-        let found = false;
-        for (const row of rows) {
-          if (!row.includes('Rendimento') && !row.includes('Amortiza')) continue;
-          found = true;
-          const type = row.includes('Amortiza') ? 'amortizacao' : 'rendimento';
-          const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
-          if (!tds || tds.length < 3) continue;
-          const comDateRaw = tds[1].replace(/<[^>]+>/g, '').trim();
-          const payDateRaw = tds[2].replace(/<[^>]+>/g, '').trim();
-          const valueRaw = tds[3].replace(/<[^>]+>/g, '').trim();
-
-          const parseBRDate = (s) => {
-            const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-            return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
-          };
-          const value = parseFloat(valueRaw.replace(',', '.'));
-          if (!value || value <= 0) continue;
-          dividends.push({
-            comDate: parseBRDate(comDateRaw),
-            paymentDate: parseBRDate(payDateRaw),
-            grossAmount: value,
-            type
-          });
-        }
-        if (found) break; // achou tabela, para de tentar outros paths
+      } catch (e) {
+        console.warn('Yahoo dividends fail:', ticker, e.message);
       }
     }
 
-    // Insere no banco
+    // Deleta registros antigos e insere novos (evita duplicatas entre fontes)
+    await pool.query('DELETE FROM asset_dividends WHERE assetid = $1', [assetId]);
+
     let inserted = 0;
     let skipped = 0;
     for (const d of dividends) {
       if (!d.comDate && !d.paymentDate) { skipped++; continue; }
-      // Verifica se já existe (mesmo asset, mesma data COM, mesmo valor)
-      const existing = await pool.query(
-        `SELECT id FROM asset_dividends
-         WHERE assetid = $1 AND comdate = $2 AND grossamount = $3 AND type = $4`,
-        [assetId, d.comDate, d.grossAmount, d.type]
-      );
-      if (existing.rows.length) { skipped++; continue; }
       try {
         await pool.query(
           `INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, type)
@@ -986,7 +980,7 @@ app.post('/api/admin/fetch-dividends', async (req, res) => {
       }
     }
 
-    res.json({ ticker, inserted, skipped, total: dividends.length });
+    res.json({ ticker, source, inserted, skipped, total: dividends.length });
   } catch (err) {
     console.error('Erro fetch-dividends:', err);
     res.status(500).json({ error: err.message });
@@ -1283,6 +1277,19 @@ app.post('/api/portfolio/parse-b3-xlsx', async (req, res) => {
     res.status(500).json({ error: 'Erro ao processar arquivo: ' + err.message, assets: [] });
   } finally {
     if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (e) {}
+  }
+});
+
+// ===================== CLEAR PORTFOLIO =====================
+app.delete('/api/portfolio/clear', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId é obrigatório.' });
+  try {
+    await pool.query('DELETE FROM portfolio_items WHERE userid = $1', [userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao limpar carteira:', err);
+    res.status(500).json({ error: 'Erro ao limpar carteira.' });
   }
 });
 

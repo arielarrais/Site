@@ -16,6 +16,54 @@ async function fetchBrapiDividends() {
   return data.dividends || [];
 }
 
+function parseBRDate(s) {
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+async function fetchStatusInvestDividends(ticker) {
+  const statusPaths = ['fiinfras', 'fiis', 'acoes'];
+  const dividends = [];
+
+  for (const path of statusPaths) {
+    const url = `https://statusinvest.com.br/${path}/${ticker.toLowerCase()}`;
+    const res = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
+    if (!res.ok) continue;
+
+    const html = await res.text();
+    const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+    let found = false;
+
+    for (const row of rows) {
+      const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+      if (!tds || tds.length < 4) continue;
+
+      const typeRaw = tds[0].replace(/<[^>]+>/g, '').trim();
+      const comDateRaw = tds[1].replace(/<[^>]+>/g, '').trim();
+      const payDateRaw = tds[2].replace(/<[^>]+>/g, '').trim();
+      const valueRaw = tds[3].replace(/<[^>]+>/g, '').trim();
+
+      if (!comDateRaw.match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+      const value = parseFloat(valueRaw.replace(',', '.'));
+      if (!value || value <= 0) continue;
+
+      found = true;
+      const type = typeRaw.toLowerCase().includes('amortiz') ? 'amortizacao' : 'rendimento';
+
+      dividends.push({
+        symbol: ticker,
+        comDate: parseBRDate(comDateRaw),
+        paymentDate: parseBRDate(payDateRaw),
+        rate: value,
+        type
+      });
+    }
+    if (found) break;
+  }
+
+  return dividends;
+}
+
 async function fetchYahooDividends(ticker) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}.SA?range=5y&interval=1d&events=div`;
   const res = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
@@ -41,57 +89,39 @@ async function fetchYahooDividends(ticker) {
       symbol: ticker,
       comDate: dateStr,
       paymentDate: null,
-      rate: div.amount
+      rate: div.amount,
+      type: 'rendimento'
     });
   }
   entries.sort((a, b) => a.comDate.localeCompare(b.comDate));
   return entries;
 }
 
-async function saveDividends(pool, assetMap, dividends) {
+async function replaceTickerDividends(pool, assetId, dividends) {
   let inserted = 0;
-  let skipped = 0;
   for (const div of dividends) {
-    const ticker = div.symbol.toUpperCase();
-    const assetId = assetMap[ticker];
-    if (!assetId) {
-      skipped++;
-      continue;
-    }
-
     const comDate = div.comDate || null;
     const paymentDate = div.paymentDate || null;
     const grossAmount = parseFloat(div.rate) || 0;
+    const divType = div.type || 'rendimento';
 
-    if (!comDate && !paymentDate) {
-      skipped++;
-      continue;
-    }
-    if (grossAmount <= 0) {
-      skipped++;
-      continue;
-    }
+    if (!comDate && !paymentDate) continue;
+    if (grossAmount <= 0) continue;
 
     const existing = await pool.query(
-      `SELECT id FROM asset_dividends 
-       WHERE assetid = $1 AND grossamount = $3
-         AND (LEFT(comdate, 7) = LEFT($2, 7) OR LEFT(paymentdate, 7) = LEFT($2, 7)
-           OR LEFT(comdate, 7) = LEFT($4, 7) OR LEFT(paymentdate, 7) = LEFT($4, 7))`,
-      [assetId, comDate, grossAmount, paymentDate || comDate]
+      'SELECT id FROM asset_dividends WHERE assetid = $1 AND comdate = $2 AND grossamount = $3',
+      [assetId, comDate, grossAmount]
     );
-    if (existing.rows.length > 0) {
-      skipped++;
-      continue;
-    }
+    if (existing.rows.length > 0) continue;
 
     await pool.query(
-      `INSERT INTO asset_dividends (assetid, paymentdate, grossamount, netamount, description, comdate, type)
+      `INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, netamount, description, type)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [assetId, paymentDate || comDate, grossAmount, grossAmount, 'Dividendo', comDate, 'dividendo']
+      [assetId, comDate, paymentDate || comDate, grossAmount, grossAmount, 'Dividendo', divType]
     );
     inserted++;
   }
-  return { inserted, skipped };
+  return inserted;
 }
 
 async function syncAllDividends(pool) {
@@ -107,48 +137,66 @@ async function syncAllDividends(pool) {
   }
 
   let totalInserted = 0;
-  const yahooFiis = [];
-  const errorFiis = [];
+  const errorTickers = [];
 
+  // Brapi para FIIs especificos (HGLG11, MXRF11)
   const brapiDivs = await fetchBrapiDividends();
   if (brapiDivs.length > 0) {
     const mapped = brapiDivs.map(d => ({
       symbol: d.symbol,
       comDate: d.lastDatePrior ? d.lastDatePrior.split(' ')[0] : null,
       paymentDate: d.paymentDate ? d.paymentDate.split(' ')[0] : null,
-      rate: d.rate
+      rate: d.rate,
+      type: 'rendimento'
     }));
-    const { inserted, skipped } = await saveDividends(pool, assetMap, mapped);
-    totalInserted += inserted;
-    console.log(`  Brapi: ${inserted} novos, ${skipped} ignorados`);
+    for (const ticker of [...new Set(mapped.map(d => d.symbol))]) {
+      const assetId = assetMap[ticker.toUpperCase()];
+      if (!assetId) continue;
+      const tickerDivs = mapped.filter(d => d.symbol === ticker);
+      const inserted = await replaceTickerDividends(pool, assetId, tickerDivs);
+      totalInserted += inserted;
+      console.log(`  Brapi ${ticker}: ${tickerDivs.length} proventos (${inserted} novos)`);
+    }
   }
 
-  console.log('--- Yahoo Finance ---');
+  // Para cada ativo: tenta StatusInvest (datas corretas), fallback Yahoo (só data com)
+  console.log('--- StatusInvest + Yahoo ---');
   const CONCURRENCY = 3;
   for (let i = 0; i < allTickers.length; i += CONCURRENCY) {
     const batch = allTickers.slice(i, i + CONCURRENCY);
-    const results = await Promise.allSettled(batch.map(t => fetchYahooDividends(t)));
+    const results = await Promise.allSettled(batch.map(async ticker => {
+      const siData = await fetchStatusInvestDividends(ticker);
+      if (siData.length > 0) return { ticker, data: siData, source: 'StatusInvest' };
+      const yData = await fetchYahooDividends(ticker);
+      return { ticker, data: yData, source: 'Yahoo' };
+    }));
 
-    for (let j = 0; j < batch.length; j++) {
-      const ticker = batch[j];
-      const result = results[j];
-      if (result.status === 'fulfilled' && result.value.length > 0) {
-        const { inserted, skipped } = await saveDividends(pool, assetMap, result.value);
-        totalInserted += inserted;
-        yahooFiis.push(ticker);
-        console.log(`  ${ticker}: ${result.value.length} proventos (${inserted} novos, ${skipped} existentes)`);
-      } else if (result.status === 'fulfilled') {
-        errorFiis.push(ticker);
-      } else {
-        errorFiis.push(ticker);
+    for (const result of results) {
+      if (result.status !== 'fulfilled') {
+        errorTickers.push('unknown');
+        continue;
       }
+      const { ticker, data, source } = result.value;
+      if (data.length === 0) {
+        errorTickers.push(ticker);
+        continue;
+      }
+
+      const assetId = assetMap[ticker];
+      if (!assetId) continue;
+
+      await pool.query('DELETE FROM asset_dividends WHERE assetid = $1', [assetId]);
+      const inserted = await replaceTickerDividends(pool, assetId, data);
+      totalInserted += inserted;
+      console.log(`  ${ticker} (${source}): ${data.length} proventos (${inserted} inseridos)`);
     }
+
     if (i + CONCURRENCY < allTickers.length) {
       await new Promise(r => setTimeout(r, 1000));
     }
   }
 
-  console.log(`\nResumo: ${totalInserted} novos proventos salvos, ${errorFiis.length} ativos sem dados`);
+  console.log(`\nResumo: ${totalInserted} proventos salvos, ${errorTickers.length} ativos sem dados`);
   console.log(`[${new Date().toISOString()}] Sincronização concluída.\n`);
 }
 
