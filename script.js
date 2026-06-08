@@ -491,58 +491,6 @@ if (isDashboard) {
   }
 
   let dividendChartInstance = null;
-  let investChartInstance = null;
-
-  function renderInvestChart(portfolio) {
-    const monthly = {};
-    for (const item of portfolio) {
-      const m = (item.purchaseDate || '').substring(0, 7);
-      if (!m) continue;
-      monthly[m] = (monthly[m] || 0) + (item.purchasePrice ?? 0) * item.quantity;
-    }
-    const labels = Object.keys(monthly).sort();
-    const data = labels.map(m => monthly[m]);
-
-    const canvas = document.getElementById('invest-chart');
-    if (!canvas) return;
-
-    if (investChartInstance) {
-      investChartInstance.destroy();
-      investChartInstance = null;
-    }
-
-    investChartInstance = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: labels.map(m => {
-          const [y, mo] = m.split('-');
-          const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-          return `${months[parseInt(mo)-1]} ${y}`;
-        }),
-        datasets: [{
-          label: 'Investido',
-          data,
-          backgroundColor: '#6c5ce7',
-          borderRadius: 4,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              callback: v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 0 })
-            }
-          }
-        }
-      }
-    });
-  }
 
   async function showDividendHistory(ticker) {
     try {
@@ -1002,8 +950,6 @@ if (isDashboard) {
     const totalDivs = grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
     metricDividendsSum.textContent = formatCurrency(totalDivs);
     metricCostDividends.textContent = formatCurrency(totalWithDividends);
-
-    renderInvestChart(portfolio);
 
     openDropdowns.forEach(t => {
       const el = findInGrids(`.three-dot-dropdown[data-ticker="${t}"]`);

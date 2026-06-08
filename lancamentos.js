@@ -94,6 +94,60 @@
     }
   }
 
+  var investChartInstance = null;
+
+  function renderInvestChart(items) {
+    var monthly = {};
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var m = (item.purchaseDate || '').substring(0, 7);
+      if (!m) continue;
+      monthly[m] = (monthly[m] || 0) + (item.purchasePrice || 0) * item.quantity;
+    }
+    var labels = Object.keys(monthly).sort();
+    var data = labels.map(function (m) { return monthly[m]; });
+
+    var canvas = document.getElementById('invest-chart');
+    if (!canvas) return;
+
+    if (investChartInstance) {
+      investChartInstance.destroy();
+      investChartInstance = null;
+    }
+
+    investChartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels.map(function (m) {
+          var parts = m.split('-');
+          var months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+          return months[parseInt(parts[1]) - 1] + ' ' + parts[0];
+        }),
+        datasets: [{
+          label: 'Investido',
+          data: data,
+          backgroundColor: '#6c5ce7',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function (v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 0 }); }
+            }
+          }
+        }
+      }
+    });
+  }
+
   req('/api/portfolio?userId=' + encodeURIComponent(currentUser.id)).then(function (data) {
     allItems = data.map(function (item) {
       return {
@@ -107,6 +161,7 @@
       };
     });
     render(allItems);
+    renderInvestChart(allItems);
   }).catch(function (e) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#e74c3c">Erro ao carregar: ' + e.message + '</td></tr>';
   });

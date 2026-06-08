@@ -76,6 +76,16 @@
 
   <div class="container dashboard-active" id="main-container">
     <div class="card dashboard-card">
+      <div class="dashboard-header">
+        <h1>Investimento por mês</h1>
+      </div>
+      <div class="dashboard-content">
+        <div style="position:relative;height:280px">
+          <canvas id="invest-chart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card dashboard-card" style="margin-top:20px">
       <div class="dashboard-content">
         <div class="portfolio-panel">
           <div class="info-box">
@@ -105,6 +115,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="lancamentos.js"></script>
 </body>
 </html>
