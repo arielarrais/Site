@@ -996,6 +996,147 @@ app.post('/api/admin/sync-dividends', async (req, res) => {
   }
 });
 
+// === Fix Payment Dates (paymentdate = comdate) ===
+const FII_DELAY_MS = 1500;
+let fixPgtoRunning = false;
+
+function parseBRDateGlobal(s) {
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+function daysBetween(a, b) {
+  return Math.abs((new Date(a) - new Date(b)) / 86400000);
+}
+
+async function fetchStatusInvestAcoes(ticker) {
+  const url = `https://statusinvest.com.br/acoes/${ticker.toLowerCase()}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+  const dividends = [];
+  for (const row of rows) {
+    const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+    if (!tds || tds.length < 4) continue;
+    const comRaw = tds[1].replace(/<[^>]+>/g, '').trim();
+    const payRaw = tds[2].replace(/<[^>]+>/g, '').trim();
+    const valRaw = tds[3].replace(/<[^>]+>/g, '').trim();
+    if (!comRaw.match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+    const val = parseFloat(valRaw.replace(',', '.'));
+    if (!val || val <= 0) continue;
+    dividends.push({ comDate: parseBRDateGlobal(comRaw), paymentDate: parseBRDateGlobal(payRaw), grossAmount: val });
+  }
+  return dividends;
+}
+
+async function fetchInvestidor10Fiis(ticker) {
+  const url = `https://investidor10.com.br/fiis/${ticker.toLowerCase()}/`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+  for (const table of tables) {
+    const headers = table.match(/<th[^>]*>(.*?)<\/th>/gi);
+    if (!headers || !headers.join('').includes('data com')) continue;
+    const rows = table.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+    const dividends = [];
+    for (let ri = 1; ri < rows.length; ri++) {
+      const tds = rows[ri].match(/<td[^>]*>(.*?)<\/td>/gs);
+      if (!tds || tds.length < 4) continue;
+      const comRaw = tds[1].replace(/<[^>]+>/g, '').trim();
+      const payRaw = tds[2].replace(/<[^>]+>/g, '').trim();
+      const valRaw = tds[3].replace(/<[^>]+>/g, '').trim();
+      if (!comRaw.match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+      const val = parseFloat(valRaw.replace(',', '.'));
+      if (!val || val <= 0) continue;
+      dividends.push({ comDate: parseBRDateGlobal(comRaw), paymentDate: parseBRDateGlobal(payRaw), grossAmount: val });
+    }
+    if (dividends.length > 0) return dividends;
+  }
+  return [];
+}
+
+async function fixPaymentDates(pool) {
+  console.log(`[${new Date().toISOString()}] Fix PGTO: iniciando...`);
+
+  const result = await pool.query(`
+    SELECT d.id, d.assetid, d.comdate, d.paymentdate, d.grossamount, a.ticker, a.assettype
+    FROM asset_dividends d
+    JOIN b3_assets a ON a.id = d.assetid
+    WHERE d.paymentdate = d.comdate
+    ORDER BY a.ticker, d.comdate
+  `);
+
+  console.log(`Fix PGTO: ${result.rows.length} registros com pgto = COM`);
+
+  const byTicker = {};
+  for (const row of result.rows) {
+    if (!byTicker[row.ticker]) byTicker[row.ticker] = { rows: [], assettype: row.assettype };
+    byTicker[row.ticker].rows.push(row);
+  }
+
+  let totalAtualizados = 0;
+  let totalIgnorados = 0;
+
+  for (const [ticker, { rows: dividends, assettype }] of Object.entries(byTicker)) {
+    let atualizados = 0;
+    let ignorados = 0;
+
+    if (assettype === 'acao') {
+      const siData = await fetchStatusInvestAcoes(ticker);
+      if (siData.length === 0) { ignorados = dividends.length; }
+      else {
+        const pgtoMap = {};
+        for (const d of siData) {
+          if (d.comDate && d.paymentDate && d.paymentDate !== d.comDate) {
+            pgtoMap[d.comDate] = d.paymentDate;
+          }
+        }
+        for (const div of dividends) {
+          const novaPgto = pgtoMap[div.comdate];
+          if (!novaPgto) { ignorados++; continue; }
+          await pool.query('UPDATE asset_dividends SET paymentdate = $1 WHERE id = $2', [novaPgto, div.id]);
+          atualizados++;
+        }
+      }
+    } else {
+      const i10Data = await fetchInvestidor10Fiis(ticker);
+      if (i10Data.length === 0) { ignorados = dividends.length; }
+      else {
+        for (const div of dividends) {
+          const match = i10Data
+            .filter(d => d.paymentDate !== d.comDate && Math.abs(d.grossAmount - div.grossamount) < 0.01)
+            .sort((a, b) => daysBetween(a.paymentDate, div.comdate) - daysBetween(b.paymentDate, div.comdate))[0];
+          if (!match || daysBetween(match.paymentDate, div.comdate) > 15) { ignorados++; continue; }
+          await pool.query('UPDATE asset_dividends SET paymentdate = $1 WHERE id = $2', [match.paymentDate, div.id]);
+          atualizados++;
+        }
+      }
+      await new Promise(r => setTimeout(r, FII_DELAY_MS));
+    }
+
+    console.log(`Fix PGTO: ${ticker} -> ${atualizados} atualizados, ${ignorados} ignorados`);
+    totalAtualizados += atualizados;
+    totalIgnorados += ignorados;
+  }
+
+  console.log(`Fix PGTO: Concluido. ${totalAtualizados} atualizados, ${totalIgnorados} ignorados`);
+}
+
+app.post('/api/admin/fix-payment-dates', async (req, res) => {
+  if (fixPgtoRunning) return res.status(400).json({ error: 'Já existe uma correção em andamento.' });
+  fixPgtoRunning = true;
+  try {
+    res.json({ message: 'Correção de datas de pagamento iniciada em segundo plano.' });
+    await fixPaymentDates(pool);
+  } catch (err) {
+    console.error('Erro fix-payment-dates:', err);
+  } finally {
+    fixPgtoRunning = false;
+  }
+});
+
 // ===================== YAHOO FINANCE =====================
 app.get('/api/quote/yahoo', async (req, res) => {
   const ticker = (req.query.ticker || '').trim().toUpperCase();

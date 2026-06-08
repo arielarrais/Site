@@ -167,6 +167,7 @@ if (isDashboard) {
   const metricTotalValue = document.getElementById('metric-total-value');
   const metricInvested = document.getElementById('metric-invested');
   const metricVariation = document.getElementById('metric-variation');
+  const metricDividendsSum = document.getElementById('metric-dividends-sum');
   const metricCostDividends = document.getElementById('metric-cost-dividends');
 
   const portfolioSort = { key: null, dir: 'asc' };
@@ -468,6 +469,8 @@ if (isDashboard) {
     metricInvested.textContent = formatCurrency(totalInvested);
     metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
     metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    const totalDivs = grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
+    metricDividendsSum.textContent = formatCurrency(totalDivs);
     metricCostDividends.textContent = formatCurrency(totalWithDividends);
   }
 
@@ -944,6 +947,8 @@ if (isDashboard) {
     metricInvested.textContent = formatCurrency(totalInvested);
     metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
     metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    const totalDivs = grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
+    metricDividendsSum.textContent = formatCurrency(totalDivs);
     metricCostDividends.textContent = formatCurrency(totalWithDividends);
 
     openDropdowns.forEach(t => {

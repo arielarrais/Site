@@ -259,3 +259,21 @@ syncBtn.addEventListener('click', async () => {
   syncBtn.disabled = false;
   syncBtn.textContent = 'Sincronizar dividendos';
 });
+
+// === Fix Payment Dates ===
+document.getElementById('fix-pgto-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('fix-pgto-btn');
+  const status = document.getElementById('fix-pgto-status');
+  btn.disabled = true;
+  status.textContent = 'Corrigindo...';
+  status.style.color = '#888';
+  try {
+    await req('/api/admin/fix-payment-dates', 'POST');
+    status.textContent = 'Correção iniciada em segundo plano.';
+    status.style.color = '#27ae60';
+  } catch (err) {
+    status.textContent = 'Erro: ' + (err.message || 'falha na conexão');
+    status.style.color = '#e74c3c';
+  }
+  btn.disabled = false;
+});
