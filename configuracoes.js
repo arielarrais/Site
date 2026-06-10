@@ -260,6 +260,35 @@ syncBtn.addEventListener('click', async () => {
   syncBtn.textContent = 'Sincronizar dividendos';
 });
 
+// === Fetch All Dividends ===
+document.getElementById('fetch-all-dividends-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('fetch-all-dividends-btn');
+  const status = document.getElementById('fetch-all-dividends-status');
+  const log = document.getElementById('fetch-all-dividends-log');
+  btn.disabled = true;
+  btn.textContent = 'Sincronizando...';
+  status.textContent = 'Buscando dividendos de todos os ativos...';
+  status.style.color = '#888';
+  log.style.display = 'block';
+  log.textContent = '';
+
+  try {
+    const res = await fetch('/api/admin/fetch-all-dividends', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao iniciar');
+    status.textContent = data.message || 'Sincronização iniciada. Aguarde a conclusão...';
+    status.style.color = '#27ae60';
+    log.textContent = `Processando ${data.total} ativos...\n`;
+    log.textContent += `Acompanhe o progresso no console do servidor.\n`;
+  } catch (err) {
+    status.textContent = 'Erro: ' + (err.message || 'falha na conexão');
+    status.style.color = '#e74c3c';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Atualizar dividendos de todos';
+});
+
 // === Fix Payment Dates ===
 document.getElementById('fix-pgto-btn').addEventListener('click', async () => {
   const btn = document.getElementById('fix-pgto-btn');

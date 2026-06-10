@@ -149,7 +149,7 @@ function renderTable(tbodyId, assets) {
         <button class="btn-register-dividend" data-id="${a.id}" data-ticker="${a.ticker}" data-name="${a.name}">
           + Dividendo
         </button>
-        <button class="btn-sync-brapi" data-ticker="${a.ticker}" title="Sincronizar">⟳</button>`
+        `
       : '';
     const fiitype = a.fiitype ? a.fiitype.charAt(0).toUpperCase() + a.fiitype.slice(1) : '—';
     return `
@@ -186,22 +186,13 @@ function onTableClick(e) {
     document.getElementById('dividend-modal').classList.remove('hidden');
     return;
   }
-  const syncBtn = e.target.closest('.btn-sync-brapi');
-  if (syncBtn) {
-    const ticker = syncBtn.dataset.ticker;
-    syncBtn.textContent = '...';
-    req(`/api/admin/sync-brapi?ticker=${encodeURIComponent(ticker)}`)
-      .then(() => { loadAssets(); })
-      .catch(err => { alert('Erro: ' + err.message); loadAssets(); });
-    return;
-  }
   const fetchDivBtn = e.target.closest('.btn-fetch-dividends');
   if (fetchDivBtn) {
     const ticker = fetchDivBtn.dataset.ticker;
     fetchDivBtn.textContent = '...';
     req('/api/admin/fetch-dividends', 'POST', { ticker })
       .then(r => {
-        alert(`${r.inserted} dividendos novos inseridos, ${r.skipped} ignorados.`);
+        alert(`${r.inserted} novos, ${r.updated} atualizados, ${r.skipped} ignorados (fonte: ${r.source}).`);
         fetchDivBtn.textContent = '🌐';
         loadAssets();
       })
@@ -238,40 +229,7 @@ document.getElementById('dividend-form').addEventListener('submit', async (e) =>
 
 if (isAdmin) {
   document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
-} else {
-  document.getElementById('sync-all-button').classList.add('hidden');
-  document.getElementById('sync-dividends-button').classList.add('hidden');
 }
-
-document.getElementById('sync-dividends-button').addEventListener('click', async () => {
-  const btn = document.getElementById('sync-dividends-button');
-  btn.textContent = 'Sincronizando...';
-  try {
-    await req('/api/admin/sync-dividends', 'POST');
-    alert('Sincronização de dividendos iniciada! Os novos proventos serão baixados em segundo plano.');
-  } catch (err) {
-    alert('Erro: ' + err.message);
-  }
-  btn.textContent = 'Sync Dividendos';
-});
-
-document.getElementById('sync-all-button').addEventListener('click', async () => {
-  const btn = document.getElementById('sync-all-button');
-  btn.textContent = 'Sincronizando...';
-  try {
-    const assets = await req('/api/b3-assets');
-    for (const a of assets) {
-      try {
-        await req(`/api/admin/sync-brapi?ticker=${encodeURIComponent(a.ticker)}`);
-      } catch (e) { console.warn(`${a.ticker}: ${e.message}`); }
-    }
-    alert('Sincronização concluída!');
-    loadAssets();
-  } catch (err) {
-    alert('Erro: ' + err.message);
-  }
-  btn.textContent = 'Sincronizar';
-});
 
 async function showDividendHistory(ticker) {
   try {

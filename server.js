@@ -889,6 +889,159 @@ app.get('/api/admin/sync-brapi', async (req, res) => {
   }
 });
 
+async function fetchAndSyncAssetDividends(pool, assetId, ticker) {
+  const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  let dividends = [];
+  let source = '';
+
+  function parseBRDate(s) {
+    const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+  }
+
+  // 1) InvistaInfo (FIIs)
+  if (!dividends.length) {
+    try {
+      const url = `https://invistainfo.com.br/ativo.php?fii=${encodeURIComponent(ticker)}`;
+      const res = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
+      if (res.ok) {
+        const html = await res.text();
+        const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+        for (const table of tables) {
+          const rows = table.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+          let found = false;
+          for (const row of rows) {
+            const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+            if (!tds || tds.length < 3) continue;
+            const cells = tds.map(t => t.replace(/<[^>]+>/g, '').trim());
+            if (!cells[0].match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+            const comDate = parseBRDate(cells[0]);
+            const payDate = parseBRDate(cells[1]);
+            const value = parseFloat(cells[2].replace(',', '.'));
+            if (comDate && value > 0) {
+              dividends.push({ comDate, paymentDate: payDate, grossAmount: value, type: 'rendimento' });
+              found = true;
+            }
+          }
+          if (found) { source = 'InvistaInfo'; break; }
+        }
+      }
+    } catch (e) { console.warn('InvistaInfo fail:', ticker, e.message); }
+  }
+
+  // 2) Fundamentus (FIIs e ações)
+  if (!dividends.length) {
+    for (const path of ['fii_proventos', 'proventos']) {
+      const isFii = path === 'fii_proventos';
+      try {
+        const url = `https://fundamentus.com.br/${path}.php?papel=${encodeURIComponent(ticker)}`;
+        const res = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
+        if (!res.ok) continue;
+        const html = await res.text();
+        const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+        let found = false;
+        for (const row of rows) {
+          const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+          if (!tds || tds.length < 4) continue;
+          const cells = tds.map(t => t.replace(/<[^>]+>/g, '').trim());
+          if (!cells[0].match(/\d{2}\/\d{2}\/\d{4}/)) continue;
+          if (isFii) {
+            const comDate = parseBRDate(cells[0]);
+            const type = cells[1].toLowerCase().includes('amortiz') ? 'amortizacao' : 'rendimento';
+            const payDate = parseBRDate(cells[2]);
+            const value = parseFloat(cells[3].replace(',', '.'));
+            if (comDate && value > 0) {
+              dividends.push({ comDate, paymentDate: payDate, grossAmount: value, type });
+              found = true;
+            }
+          } else {
+            const comDate = parseBRDate(cells[0]);
+            const value = parseFloat(cells[1].replace(',', '.'));
+            const payDate = parseBRDate(cells[3]);
+            const type = cells[2].toLowerCase().includes('jrs') ? 'juros' : 'rendimento';
+            if (comDate && value > 0) {
+              dividends.push({ comDate, paymentDate: payDate, grossAmount: value, type });
+              found = true;
+            }
+          }
+        }
+        if (found) { source = 'Fundamentus'; break; }
+      } catch (e) { console.warn(`Fundamentus/${path} fail:`, ticker, e.message); }
+    }
+  }
+
+  // 3) StockAnalysis (fallback)
+  if (!dividends.length) {
+    try {
+      const url = `https://stockanalysis.com/quote/bvmf/${encodeURIComponent(ticker)}/dividend/`;
+      const res = await fetch(url, { headers: { 'User-Agent': YAHOO_UA } });
+      if (res.ok) {
+        const html = await res.text();
+        const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+        let found = false;
+        for (const row of rows) {
+          const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
+          if (!tds || tds.length < 4) continue;
+          const cells = tds.map(t => t.replace(/<[^>]+>/g, '').trim());
+          if (!cells[0].match(/\w{3}\s+\d{1,2},\s*\d{4}/)) continue;
+          const parseUSDate = (s) => {
+            const m = s.match(/(\w{3})\s+(\d{1,2}),?\s*(\d{4})/);
+            if (!m) return null;
+            const months = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
+            return `${m[3]}-${months[m[1]]}-${String(Number(m[2])).padStart(2,'0')}`;
+          };
+          const comDate = parseUSDate(cells[0]);
+          const amt = parseFloat(cells[1].replace(/[^0-9.,]/g, '').replace(',', ''));
+          const payDate = parseUSDate(cells[3]);
+          if (comDate && amt > 0) {
+            dividends.push({ comDate, paymentDate: payDate || comDate, grossAmount: amt, type: 'rendimento' });
+            found = true;
+          }
+        }
+        if (found) source = 'StockAnalysis';
+      }
+    } catch (e) { console.warn('StockAnalysis fail:', ticker, e.message); }
+  }
+
+  if (!dividends.length) return { source: '', inserted: 0, updated: 0, skipped: 0, total: 0 };
+
+  let inserted = 0, updated = 0, skipped = 0;
+  for (const d of dividends) {
+    if (!d.comDate && !d.paymentDate) { skipped++; continue; }
+    try {
+      const existing = await pool.query(
+        `SELECT id, paymentdate, grossamount, type FROM asset_dividends WHERE assetid = $1 AND comdate = $2`,
+        [assetId, d.comDate]
+      );
+      if (existing.rows.length) {
+        const row = existing.rows[0];
+        const payDate = d.paymentDate || d.comDate;
+        if (row.paymentdate !== payDate || Number(row.grossamount) !== d.grossAmount || (row.type || 'rendimento') !== d.type) {
+          await pool.query(
+            `UPDATE asset_dividends SET paymentdate = $1, grossamount = $2, type = $3 WHERE id = $4`,
+            [payDate, d.grossAmount, d.type, row.id]
+          );
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        await pool.query(
+          `INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, type)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [assetId, d.comDate, d.paymentDate || d.comDate, d.grossAmount, d.type]
+        );
+        inserted++;
+      }
+    } catch (e) {
+      console.error(`Erro processando dividendo ${ticker} ${d.comDate}:`, e.message);
+      skipped++;
+    }
+  }
+
+  return { source, inserted, updated, skipped, total: dividends.length };
+}
+
 app.post('/api/admin/fetch-dividends', async (req, res) => {
   const ticker = (req.body.ticker || '').trim().toUpperCase();
   if (!ticker) return res.status(400).json({ error: 'Ticker é obrigatório.' });
@@ -896,94 +1049,36 @@ app.post('/api/admin/fetch-dividends', async (req, res) => {
     const assetResult = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [ticker]);
     if (!assetResult.rows.length) return res.status(404).json({ error: 'Ativo não encontrado no banco.' });
     const assetId = assetResult.rows[0].id;
-
-    const YAHOO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    let dividends = [];
-    let source = '';
-
-    // Tenta StatusInvest primeiro (retorna data COM e data pgto corretas)
-    const statusPaths = ['fiinfras', 'fiis', 'acoes'];
-    for (const path of statusPaths) {
-      console.log(`Fetch-dividends: scraping StatusInvest/${path} para`, ticker);
-      const siUrl = `https://statusinvest.com.br/${path}/${ticker.toLowerCase()}`;
-      const sRes = await fetch(siUrl, { headers: { 'User-Agent': YAHOO_UA } });
-      if (!sRes.ok) { console.warn(`  StatusInvest/${path}: ${sRes.status}`); continue; }
-      const html = await sRes.text();
-      const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
-      let found = false;
-      for (const row of rows) {
-        const tds = row.match(/<td[^>]*>(.*?)<\/td>/gs);
-        if (!tds || tds.length < 4) continue;
-        const typeRaw = tds[0].replace(/<[^>]+>/g, '').trim();
-        const comDateRaw = tds[1].replace(/<[^>]+>/g, '').trim();
-        const payDateRaw = tds[2].replace(/<[^>]+>/g, '').trim();
-        const valueRaw = tds[3].replace(/<[^>]+>/g, '').trim();
-        if (!comDateRaw.match(/\d{2}\/\d{2}\/\d{4}/)) continue;
-        const parseBRDate = (s) => {
-          const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-          return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
-        };
-        const value = parseFloat(valueRaw.replace(',', '.'));
-        if (!value || value <= 0) continue;
-        found = true;
-        const type = typeRaw.toLowerCase().includes('amortiz') ? 'amortizacao' : 'rendimento';
-        dividends.push({
-          comDate: parseBRDate(comDateRaw),
-          paymentDate: parseBRDate(payDateRaw),
-          grossAmount: value,
-          type
-        });
-      }
-      if (found) { source = 'StatusInvest'; break; }
-    }
-
-    // Fallback Yahoo (só tem data COM, sem data pgto)
-    if (!dividends.length) {
-      try {
-        const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}.SA?interval=1d&range=5y&events=div`;
-        const yRes = await fetch(yUrl, { headers: { 'User-Agent': YAHOO_UA } });
-        if (yRes.ok) {
-          const yData = await yRes.json();
-          const divs = yData?.chart?.result?.[0]?.events?.dividends;
-          if (divs) {
-            dividends = Object.entries(divs).map(([ts, v]) => ({
-              comDate: new Date(v.date * 1000).toISOString().slice(0, 10),
-              paymentDate: null,
-              grossAmount: v.amount,
-              type: 'rendimento'
-            }));
-            source = 'Yahoo';
-          }
-        }
-      } catch (e) {
-        console.warn('Yahoo dividends fail:', ticker, e.message);
-      }
-    }
-
-    // Deleta registros antigos e insere novos (evita duplicatas entre fontes)
-    await pool.query('DELETE FROM asset_dividends WHERE assetid = $1', [assetId]);
-
-    let inserted = 0;
-    let skipped = 0;
-    for (const d of dividends) {
-      if (!d.comDate && !d.paymentDate) { skipped++; continue; }
-      try {
-        await pool.query(
-          `INSERT INTO asset_dividends (assetid, comdate, paymentdate, grossamount, type)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [assetId, d.comDate, d.paymentDate || d.comDate, d.grossAmount, d.type]
-        );
-        inserted++;
-      } catch (e) {
-        console.error(`Erro inserindo dividendo ${ticker} ${d.comDate}:`, e.message);
-        skipped++;
-      }
-    }
-
-    res.json({ ticker, source, inserted, skipped, total: dividends.length });
+    const result = await fetchAndSyncAssetDividends(pool, assetId, ticker);
+    res.json({ ticker, ...result });
   } catch (err) {
     console.error('Erro fetch-dividends:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/fetch-all-dividends', async (req, res) => {
+  try {
+    const assets = await pool.query('SELECT id, ticker FROM b3_assets ORDER BY ticker');
+    res.json({ total: assets.rows.length, message: 'Sincronização iniciada em segundo plano.' });
+
+    let totalInserted = 0, totalUpdated = 0, totalSkipped = 0, errors = [];
+    for (let i = 0; i < assets.rows.length; i++) {
+      const { id, ticker } = assets.rows[i];
+      try {
+        const result = await fetchAndSyncAssetDividends(pool, id, ticker);
+        totalInserted += result.inserted;
+        totalUpdated += result.updated;
+        totalSkipped += result.skipped;
+        console.log(`[${i + 1}/${assets.rows.length}] ${ticker}: ${result.source} | +${result.inserted} ~${result.updated} -${result.skipped}`);
+      } catch (e) {
+        errors.push(ticker);
+        console.warn(`Erro em ${ticker}:`, e.message);
+      }
+    }
+    console.log(`Fetch-all concluído: ${totalInserted} novos, ${totalUpdated} atualizados, ${totalSkipped} ignorados, ${errors.length} erros.`);
+  } catch (err) {
+    console.error('Erro fetch-all-dividends:', err);
   }
 });
 

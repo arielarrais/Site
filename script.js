@@ -219,7 +219,9 @@ if (isDashboard) {
       userId,
       quantity: item.quantity,
       purchasePrice: item.purchasePrice,
-      purchaseDate: item.purchaseDate
+      purchaseDate: item.purchaseDate,
+      institution: item.institution || '',
+      movementType: item.movementType || 'compra'
     });
   }
 
@@ -820,6 +822,10 @@ if (isDashboard) {
                   <span>${formatDateBR(itemDate)}</span>
                 </div>
                 <div class="grid-detail-cell">
+                  <span class="detail-label">Tipo</span>
+                  <span>${item.movementType === 'venda' ? 'Venda' : 'Compra'}</span>
+                </div>
+                <div class="grid-detail-cell">
                   <span class="detail-label">Qtd</span>
                   <span>${item.quantity}</span>
                 </div>
@@ -836,6 +842,10 @@ if (isDashboard) {
                   <span class="${itemProfitLoss >= 0 ? 'profit' : 'loss'}">${formatCurrency(itemProfitLoss)}</span>
                 </div>
                 <div class="grid-detail-cell">
+                  <span class="detail-label">Instituição</span>
+                  <span>${item.institution || '—'}</span>
+                </div>
+                <div class="grid-detail-cell">
                   <button class="edit-asset-button" data-id="${item.id}">Editar</button>
                   <button class="remove-asset-button" data-id="${item.id}">Remover</button>
                 </div>
@@ -843,9 +853,11 @@ if (isDashboard) {
               <div class="edit-launch-form hidden" data-id="${item.id}">
                 <div class="add-launch-inner">
                   <div class="form-title">Editar lançamento</div>
+                  <label>Tipo <select class="el-type"><option value="compra" ${item.movementType === 'venda' ? '' : 'selected'}>Compra</option><option value="venda" ${item.movementType === 'venda' ? 'selected' : ''}>Venda</option></select></label>
                   <label>Quantidade <input class="el-quantity" type="number" min="1" step="1" value="${item.quantity}" /></label>
                   <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${(item.purchasePrice ?? itemCurrentPrice).toFixed(2)}" /></label>
                   <label>Data <input class="el-date date-br" type="date" value="${itemDate || getTodayInputValue()}" /></label>
+                  <label>Instituição <input class="el-institution" type="text" placeholder="Opcional" value="${item.institution || ''}" /></label>
                   <button class="btn btn-primary el-save" type="button" data-id="${item.id}" style="width:auto">Salvar</button>
                   <button class="btn btn-secondary el-cancel" type="button" style="width:auto">Cancelar</button>
                 </div>
@@ -855,9 +867,11 @@ if (isDashboard) {
           <div class="add-launch-form" data-ticker="${group.ticker}">
             <div class="add-launch-inner">
               <div class="form-title">Novo lançamento</div>
+              <label>Tipo <select class="al-type"><option value="compra">Compra</option><option value="venda">Venda</option></select></label>
               <label>Quantidade <input class="al-quantity" type="number" min="1" step="1" value="1" /></label>
               <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${currentPrice.toFixed(2)}" /></label>
               <label>Data <input class="al-date date-br" type="date" value="${getTodayInputValue()}" /></label>
+              <label>Instituição <input class="al-institution" type="text" placeholder="Opcional" /></label>
               <button class="btn btn-primary al-save" type="button" data-ticker="${group.ticker}" style="width:auto">Salvar</button>
               <button class="btn btn-secondary al-cancel" type="button" style="width:auto">Cancelar</button>
             </div>
@@ -896,17 +910,21 @@ if (isDashboard) {
     findAllInGrids('.add-launch-form:not(.hidden)').forEach(el => {
       openForms.add(el.dataset.ticker);
       openFormValues.set(el.dataset.ticker, {
+        type: el.querySelector('.al-type').value,
         quantity: el.querySelector('.al-quantity').value,
         price: el.querySelector('.al-price').value,
         date: el.querySelector('.al-date').value,
+        institution: el.querySelector('.al-institution').value,
       });
     });
     findAllInGrids('.edit-launch-form:not(.hidden)').forEach(el => {
       openEditForms.add(el.dataset.id);
       openEditFormValues.set(el.dataset.id, {
+        type: el.querySelector('.el-type').value,
         quantity: el.querySelector('.el-quantity').value,
         price: el.querySelector('.el-price').value,
         date: el.querySelector('.el-date').value,
+        institution: el.querySelector('.el-institution').value,
       });
     });
     findAllInGrids('.grid-details:not(.hidden)').forEach(el => {
@@ -1027,9 +1045,11 @@ if (isDashboard) {
         el.classList.remove('hidden');
         const vals = openFormValues.get(t);
         if (vals) {
+          el.querySelector('.al-type').value = vals.type || 'compra';
           el.querySelector('.al-quantity').value = vals.quantity;
           el.querySelector('.al-price').value = vals.price;
           el.querySelector('.al-date').value = vals.date;
+          el.querySelector('.al-institution').value = vals.institution || '';
         }
       }
     });
@@ -1039,9 +1059,11 @@ if (isDashboard) {
         el.classList.remove('hidden');
         const vals = openEditFormValues.get(id);
         if (vals) {
+          el.querySelector('.el-type').value = vals.type || 'compra';
           el.querySelector('.el-quantity').value = vals.quantity;
           el.querySelector('.el-price').value = vals.price;
           el.querySelector('.el-date').value = vals.date;
+          el.querySelector('.el-institution').value = vals.institution || '';
         }
       }
     });
@@ -1054,17 +1076,17 @@ if (isDashboard) {
     enhanceDateInputs();
   }
 
-  async function addAssetToPortfolio(ticker, quantity, purchasePrice, purchaseDate) {
+  async function addAssetToPortfolio(ticker, quantity, purchasePrice, purchaseDate, movementType, institution) {
     const existingPortfolio = getPortfolio();
     if (!currentUser) { alert('Você precisa estar logado.'); return; }
-    const item = { ticker, quantity, purchasePrice, purchaseDate };
+    const item = { ticker, quantity, purchasePrice, purchaseDate, movementType, institution };
     const saved = await savePortfolioItemToServer(item, currentUser.id);
     const newPortfolio = [...existingPortfolio, saved];
     savePortfolio(newPortfolio);
     await fetchDividendReturns();
     await renderPortfolio();
     refreshPortfolioPrices();
-    alert(`${ticker} cadastrado na carteira com ${quantity} unidade(s) a ${formatCurrency(purchasePrice)}.`);
+    alert(`${ticker} ${movementType === 'venda' ? 'vendido' : 'cadastrado'} na carteira com ${quantity} unidade(s) a ${formatCurrency(purchasePrice)}.`);
   }
 
   async function removeAssetFromPortfolio(id) {
@@ -1078,12 +1100,12 @@ if (isDashboard) {
     await renderPortfolio();
   }
 
-  async function updateAssetInPortfolio(id, quantity, purchasePrice, purchaseDate) {
+  async function updateAssetInPortfolio(id, quantity, purchasePrice, purchaseDate, movementType, institution) {
     if (!currentUser) { alert('Você precisa estar logado.'); return; }
     const portfolio = getPortfolio();
     const idx = portfolio.findIndex((item) => item.id === id);
     if (idx === -1) { alert('Item não encontrado na carteira.'); return; }
-    const updated = { ...portfolio[idx], quantity, purchasePrice, purchaseDate };
+    const updated = { ...portfolio[idx], quantity, purchasePrice, purchaseDate, movementType, institution };
     try {
       await updatePortfolioItemInServer(updated, currentUser.id);
       portfolio[idx] = updated;
@@ -1179,14 +1201,16 @@ if (isDashboard) {
     if (saveBtn) {
       const ticker = saveBtn.dataset.ticker;
       const form = saveBtn.closest('.add-launch-form');
+      const type = form.querySelector('.al-type').value;
       const quantity = Number(form.querySelector('.al-quantity').value);
       const price = Number(form.querySelector('.al-price').value);
       const date = form.querySelector('.al-date').value;
+      const institution = form.querySelector('.al-institution').value.trim();
       if (!quantity || quantity < 1) { alert('Quantidade inválida.'); return; }
       if (!price || price <= 0) { alert('Preço inválido.'); return; }
       if (!date) { alert('Data inválida.'); return; }
       try {
-        await addAssetToPortfolio(ticker, quantity, price, date);
+        await addAssetToPortfolio(ticker, quantity, price, date, type, institution);
         form.classList.add('hidden');
       } catch (err) { alert(err.message); }
       return;
@@ -1212,13 +1236,15 @@ if (isDashboard) {
     if (elSaveBtn) {
       const id = Number(elSaveBtn.dataset.id);
       const form = elSaveBtn.closest('.edit-launch-form');
+      const type = form.querySelector('.el-type').value;
       const quantity = Number(form.querySelector('.el-quantity').value);
       const price = Number(form.querySelector('.el-price').value);
       const date = form.querySelector('.el-date').value;
+      const institution = form.querySelector('.el-institution').value.trim();
       if (!quantity || quantity < 1) { alert('Quantidade inválida.'); return; }
       if (!price || price <= 0) { alert('Preço inválido.'); return; }
       if (!date) { alert('Data inválida.'); return; }
-      await updateAssetInPortfolio(id, quantity, price, date);
+      await updateAssetInPortfolio(id, quantity, price, date, type, institution);
       form.classList.add('hidden');
       return;
     }
