@@ -320,6 +320,22 @@ input:focus {
   color: #e74c3c;
 }
 
+.metric-pct {
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.metric-pct.profit { color: #27ae60; }
+.metric-pct.loss { color: #e74c3c; }
+
+.metric-sub {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+.metric-sub.profit { color: #27ae60; }
+.metric-sub.loss { color: #e74c3c; }
+
 .date-br-wrap {
   position: relative;
   display: flex;

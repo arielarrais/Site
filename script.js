@@ -166,7 +166,7 @@ if (isDashboard) {
   }
   const metricTotalValue = document.getElementById('metric-total-value');
   const metricInvested = document.getElementById('metric-invested');
-  const metricVariation = document.getElementById('metric-variation');
+  const metricVariation = document.getElementById('metric-variation-sub');
   const metricDividendsSum = document.getElementById('metric-dividends-sum');
   const metricCostDividends = document.getElementById('metric-cost-dividends');
 
@@ -360,6 +360,23 @@ if (isDashboard) {
     return await req(`/api/quotes?tickers=${encodeURIComponent(tickers.join(','))}`);
   }
 
+  function savePricesToCache() {
+    const obj = {};
+    latestPrices.forEach((v, k) => { obj[k] = v; });
+    sessionStorage.setItem('priceCache', JSON.stringify(obj));
+  }
+
+  function loadPricesFromCache() {
+    try {
+      const raw = sessionStorage.getItem('priceCache');
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      Object.entries(obj).forEach(([ticker, price]) => {
+        latestPrices.set(ticker, price);
+      });
+    } catch (e) { /* ignore */ }
+  }
+
   async function refreshPortfolioPrices() {
     const portfolio = getPortfolio();
     if (!portfolio.length) return;
@@ -385,6 +402,7 @@ if (isDashboard) {
       console.warn('Batch falhou, buscando individualmente...');
       await Promise.allSettled(tickers.map(t => fetchQuotePrice(t)));
     }
+    savePricesToCache();
     updatePriceDisplay();
   }
 
@@ -467,11 +485,35 @@ if (isDashboard) {
     fiisSummary.textContent = summaryText;
     metricTotalValue.textContent = formatCurrency(totalValue);
     metricInvested.textContent = formatCurrency(totalInvested);
-    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
-    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    if (metricVariation) {
+      metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
+      metricVariation.className = 'metric-sub ' + (percent >= 0 ? 'profit' : 'loss');
+    }
     const totalDivs = grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
     metricDividendsSum.textContent = formatCurrency(totalDivs);
+    const rentPctTotal = totalInvested ? ((totalWithDividends - totalInvested) / totalInvested * 100) : 0;
     metricCostDividends.textContent = formatCurrency(totalWithDividends);
+    const pctEl = document.getElementById('metric-cost-dividends-pct');
+    if (pctEl) {
+      pctEl.textContent = `${rentPctTotal >= 0 ? '+' : ''}${rentPctTotal.toFixed(2)}%`;
+      pctEl.className = 'metric-pct ' + (rentPctTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentTotal = totalWithDividends - totalInvested;
+    const subEl = document.getElementById('metric-cost-dividends-sub');
+    if (subEl) {
+      subEl.textContent = `${rentTotal >= 0 ? '+' : ''}${formatCurrency(rentTotal)}`;
+      subEl.className = 'metric-sub ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentEl = document.getElementById('metric-rentabilidade');
+    if (rentEl) {
+      rentEl.textContent = `${rentTotal >= 0 ? '+' : ''}${formatCurrency(rentTotal)}`;
+      rentEl.className = 'metric-value ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentPctEl = document.getElementById('metric-rentabilidade-pct');
+    if (rentPctEl) {
+      rentPctEl.textContent = `${rentPctTotal >= 0 ? '+' : ''}${rentPctTotal.toFixed(2)}%`;
+      rentPctEl.className = 'metric-sub ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
   }
 
   async function fetchDividendReturns() {
@@ -945,11 +987,35 @@ if (isDashboard) {
     fiisSummary.textContent = summaryText;
     metricTotalValue.textContent = formatCurrency(totalValue);
     metricInvested.textContent = formatCurrency(totalInvested);
-    metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
-    metricVariation.className = 'metric-value ' + (percent >= 0 ? 'profit' : 'loss');
+    if (metricVariation) {
+      metricVariation.textContent = `${percent >= 0 ? '+' : ''}${percent}%`;
+      metricVariation.className = 'metric-sub ' + (percent >= 0 ? 'profit' : 'loss');
+    }
     const totalDivs = grouped.reduce((sum, g) => sum + (dividendReturns.get(g.ticker) || 0), 0);
     metricDividendsSum.textContent = formatCurrency(totalDivs);
+    const rentPctTotal = totalInvested ? ((totalWithDividends - totalInvested) / totalInvested * 100) : 0;
     metricCostDividends.textContent = formatCurrency(totalWithDividends);
+    const pctEl = document.getElementById('metric-cost-dividends-pct');
+    if (pctEl) {
+      pctEl.textContent = `${rentPctTotal >= 0 ? '+' : ''}${rentPctTotal.toFixed(2)}%`;
+      pctEl.className = 'metric-pct ' + (rentPctTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentTotal = totalWithDividends - totalInvested;
+    const subEl = document.getElementById('metric-cost-dividends-sub');
+    if (subEl) {
+      subEl.textContent = `${rentTotal >= 0 ? '+' : ''}${formatCurrency(rentTotal)}`;
+      subEl.className = 'metric-sub ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentEl = document.getElementById('metric-rentabilidade');
+    if (rentEl) {
+      rentEl.textContent = `${rentTotal >= 0 ? '+' : ''}${formatCurrency(rentTotal)}`;
+      rentEl.className = 'metric-value ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
+    const rentPctEl = document.getElementById('metric-rentabilidade-pct');
+    if (rentPctEl) {
+      rentPctEl.textContent = `${rentPctTotal >= 0 ? '+' : ''}${rentPctTotal.toFixed(2)}%`;
+      rentPctEl.className = 'metric-sub ' + (rentTotal >= 0 ? 'profit' : 'loss');
+    }
 
     openDropdowns.forEach(t => {
       const el = findInGrids(`.three-dot-dropdown[data-ticker="${t}"]`);
@@ -1028,6 +1094,7 @@ if (isDashboard) {
     } catch (err) { alert(err.message); }
   }
 
+  loadPricesFromCache();
   fetchPortfolioFromServer(currentUser.id)
     .then(async p => { savePortfolio(p); await fetchDividendReturns(); await renderPortfolio(); refreshPortfolioPrices(); })
     .catch(e => console.warn(e.message));

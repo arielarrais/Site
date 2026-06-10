@@ -1512,7 +1512,6 @@ app.listen(port, '0.0.0.0', async () => {
     await migrateDividendTableIfNeeded();
     await migrateB3AssetsTableIfNeeded();
     await migrateUsersTableIfNeeded();
-    await seedAssetsDatabase();
   } catch (err) {
     console.error('Erro na inicialização do banco:', err);
   }
