@@ -1057,6 +1057,51 @@ app.post('/api/admin/fetch-dividends', async (req, res) => {
   }
 });
 
+app.get('/api/admin/fetch-all-dividends/stream', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const assets = await pool.query('SELECT id, ticker FROM b3_assets ORDER BY ticker');
+    const total = assets.rows.length;
+
+    sendEvent('start', { total });
+
+    let totalInserted = 0, totalUpdated = 0, totalSkipped = 0, errors = [];
+
+    for (let i = 0; i < total; i++) {
+      const { id, ticker } = assets.rows[i];
+      try {
+        const result = await fetchAndSyncAssetDividends(pool, id, ticker);
+        totalInserted += result.inserted;
+        totalUpdated += result.updated;
+        totalSkipped += result.skipped;
+        sendEvent('progress', { current: i + 1, total, ticker, ...result });
+        console.log(`[${i + 1}/${total}] ${ticker}: ${result.source} | +${result.inserted} ~${result.updated} -${result.skipped}`);
+      } catch (e) {
+        errors.push(ticker);
+        sendEvent('error', { current: i + 1, total, ticker, error: e.message });
+        console.warn(`Erro em ${ticker}:`, e.message);
+      }
+    }
+
+    sendEvent('done', { totalInserted, totalUpdated, totalSkipped, errors: errors.length });
+    console.log(`Fetch-all concluído: ${totalInserted} novos, ${totalUpdated} atualizados, ${totalSkipped} ignorados, ${errors.length} erros.`);
+    res.end();
+  } catch (err) {
+    sendEvent('fail', { error: err.message });
+    console.error('Erro fetch-all-dividends:', err);
+    res.end();
+  }
+});
+
 app.post('/api/admin/fetch-all-dividends', async (req, res) => {
   try {
     const assets = await pool.query('SELECT id, ticker FROM b3_assets ORDER BY ticker');

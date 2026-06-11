@@ -261,32 +261,66 @@ syncBtn.addEventListener('click', async () => {
 });
 
 // === Fetch All Dividends ===
-document.getElementById('fetch-all-dividends-btn').addEventListener('click', async () => {
+document.getElementById('fetch-all-dividends-btn').addEventListener('click', () => {
   const btn = document.getElementById('fetch-all-dividends-btn');
-  const status = document.getElementById('fetch-all-dividends-status');
+  const startLabel = document.getElementById('fetch-all-dividends-start');
+  const finishLabel = document.getElementById('fetch-all-dividends-finish');
   const log = document.getElementById('fetch-all-dividends-log');
+
   btn.disabled = true;
   btn.textContent = 'Sincronizando...';
-  status.textContent = 'Buscando dividendos de todos os ativos...';
-  status.style.color = '#888';
+  startLabel.textContent = 'Iniciando...';
+  startLabel.style.color = '#888';
+  finishLabel.textContent = '';
   log.style.display = 'block';
   log.textContent = '';
 
-  try {
-    const res = await fetch('/api/admin/fetch-all-dividends', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erro ao iniciar');
-    status.textContent = data.message || 'Sincronização iniciada. Aguarde a conclusão...';
-    status.style.color = '#27ae60';
-    log.textContent = `Processando ${data.total} ativos...\n`;
-    log.textContent += `Acompanhe o progresso no console do servidor.\n`;
-  } catch (err) {
-    status.textContent = 'Erro: ' + (err.message || 'falha na conexão');
-    status.style.color = '#e74c3c';
-  }
+  const evtSource = new EventSource('/api/admin/fetch-all-dividends/stream');
 
-  btn.disabled = false;
-  btn.textContent = 'Atualizar dividendos de todos';
+  evtSource.addEventListener('start', (e) => {
+    const data = JSON.parse(e.data);
+    startLabel.textContent = `Processando ${data.total} ativos...`;
+    startLabel.style.color = '#27ae60';
+  });
+
+  evtSource.addEventListener('progress', (e) => {
+    const data = JSON.parse(e.data);
+    log.textContent += `[${data.current}/${data.total}] ${data.ticker}: ${data.source} | +${data.inserted} ~${data.updated} -${data.skipped}\n`;
+    log.scrollTop = log.scrollHeight;
+  });
+
+  evtSource.addEventListener('done', (e) => {
+    const data = JSON.parse(e.data);
+    startLabel.textContent = 'Concluído';
+    startLabel.style.color = '#27ae60';
+    const hasErrors = data.errors > 0;
+    finishLabel.textContent = `Finalizado: ${data.totalInserted} novos, ${data.totalUpdated} atualizados, ${data.totalSkipped} ignorados${hasErrors ? `, ${data.errors} erros` : ''}`;
+    finishLabel.style.color = hasErrors ? '#e67e22' : '#27ae60';
+    btn.disabled = false;
+    btn.textContent = 'Atualizar todos os dividendos';
+    evtSource.close();
+  });
+
+  evtSource.addEventListener('error', () => {
+    startLabel.textContent = 'Erro';
+    startLabel.style.color = '#e74c3c';
+    finishLabel.textContent = 'Falha na conexão com o servidor';
+    finishLabel.style.color = '#e74c3c';
+    btn.disabled = false;
+    btn.textContent = 'Atualizar todos os dividendos';
+    evtSource.close();
+  });
+
+  evtSource.addEventListener('fail', (e) => {
+    const data = JSON.parse(e.data);
+    startLabel.textContent = 'Erro';
+    startLabel.style.color = '#e74c3c';
+    finishLabel.textContent = 'Erro: ' + (data.error || 'falha no servidor');
+    finishLabel.style.color = '#e74c3c';
+    btn.disabled = false;
+    btn.textContent = 'Atualizar todos os dividendos';
+    evtSource.close();
+  });
 });
 
 // === Fix Payment Dates ===
