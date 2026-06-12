@@ -220,7 +220,8 @@ const syncBtn = document.getElementById('sync-dividends-btn');
 const syncStatus = document.getElementById('sync-dividends-status');
 const syncLog = document.getElementById('sync-dividends-log');
 
-syncBtn.addEventListener('click', async () => {
+if (syncBtn) {
+  syncBtn.addEventListener('click', async () => {
   syncBtn.disabled = true;
   syncBtn.textContent = 'Sincronizando...';
   syncStatus.textContent = 'Buscando dividendos...';
@@ -259,6 +260,7 @@ syncBtn.addEventListener('click', async () => {
   syncBtn.disabled = false;
   syncBtn.textContent = 'Sincronizar dividendos';
 });
+}
 
 // === Fetch All Dividends ===
 document.getElementById('fetch-all-dividends-btn').addEventListener('click', () => {
@@ -269,9 +271,11 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
 
   btn.disabled = true;
   btn.textContent = 'Sincronizando...';
-  startLabel.textContent = 'Iniciando...';
-  startLabel.style.color = '#888';
+  startLabel.className = 'process-status start';
+  startLabel.textContent = 'Iniciando processo de busca de dividendos...';
+  finishLabel.className = 'process-status';
   finishLabel.textContent = '';
+  finishLabel.style.display = 'none';
   log.style.display = 'block';
   log.textContent = '';
 
@@ -280,7 +284,6 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
   evtSource.addEventListener('start', (e) => {
     const data = JSON.parse(e.data);
     startLabel.textContent = `Processando ${data.total} ativos...`;
-    startLabel.style.color = '#27ae60';
   });
 
   evtSource.addEventListener('progress', (e) => {
@@ -291,21 +294,21 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
 
   evtSource.addEventListener('done', (e) => {
     const data = JSON.parse(e.data);
-    startLabel.textContent = 'Concluído';
-    startLabel.style.color = '#27ae60';
     const hasErrors = data.errors > 0;
-    finishLabel.textContent = `Finalizado: ${data.totalInserted} novos, ${data.totalUpdated} atualizados, ${data.totalSkipped} ignorados${hasErrors ? `, ${data.errors} erros` : ''}`;
-    finishLabel.style.color = hasErrors ? '#e67e22' : '#27ae60';
+    startLabel.className = 'process-status finish';
+    startLabel.textContent = `Fetch-all concluído: ${data.totalInserted} novos, ${data.totalUpdated} atualizados, ${data.totalSkipped} ignorados, ${data.errors} erros.`;
+    finishLabel.className = 'process-status' + (hasErrors ? ' error' : ' finish');
+    finishLabel.textContent = hasErrors ? `${data.errors} erro(s) encontrados` : 'Processo finalizado com sucesso';
     btn.disabled = false;
     btn.textContent = 'Atualizar todos os dividendos';
     evtSource.close();
   });
 
   evtSource.addEventListener('error', () => {
-    startLabel.textContent = 'Erro';
-    startLabel.style.color = '#e74c3c';
+    startLabel.className = 'process-status error';
+    startLabel.textContent = 'Erro de conexão';
+    finishLabel.className = 'process-status error';
     finishLabel.textContent = 'Falha na conexão com o servidor';
-    finishLabel.style.color = '#e74c3c';
     btn.disabled = false;
     btn.textContent = 'Atualizar todos os dividendos';
     evtSource.close();
@@ -313,10 +316,10 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
 
   evtSource.addEventListener('fail', (e) => {
     const data = JSON.parse(e.data);
-    startLabel.textContent = 'Erro';
-    startLabel.style.color = '#e74c3c';
-    finishLabel.textContent = 'Erro: ' + (data.error || 'falha no servidor');
-    finishLabel.style.color = '#e74c3c';
+    startLabel.className = 'process-status error';
+    startLabel.textContent = 'Erro no servidor';
+    finishLabel.className = 'process-status error';
+    finishLabel.textContent = data.error || 'falha no servidor';
     btn.disabled = false;
     btn.textContent = 'Atualizar todos os dividendos';
     evtSource.close();
@@ -324,7 +327,9 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
 });
 
 // === Fix Payment Dates ===
-document.getElementById('fix-pgto-btn').addEventListener('click', async () => {
+const fixBtn = document.getElementById('fix-pgto-btn');
+if (fixBtn) {
+  fixBtn.addEventListener('click', async () => {
   const btn = document.getElementById('fix-pgto-btn');
   const status = document.getElementById('fix-pgto-status');
   btn.disabled = true;
@@ -339,4 +344,6 @@ document.getElementById('fix-pgto-btn').addEventListener('click', async () => {
     status.style.color = '#e74c3c';
   }
   btn.disabled = false;
-});
+  });
+}
+

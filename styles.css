@@ -1286,3 +1286,44 @@ body.with-sidebar.sidebar-collapsed {
   color: #888;
   font-weight: 400;
 }
+
+.process-status {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.process-status.start {
+  display: block;
+  background: #eef6ff;
+  color: #1a73e8;
+  border: 1px solid #d0e3ff;
+}
+
+.process-status.start::before {
+  content: "⏳ ";
+}
+
+.process-status.finish {
+  display: block;
+  background: #f0faf0;
+  color: #1e7e34;
+  border: 1px solid #c8e6c9;
+}
+
+.process-status.finish::before {
+  content: "✓ ";
+}
+
+.process-status.error {
+  display: block;
+  background: #fef0f0;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.process-status.error::before {
+  content: "✗ ";
+}
