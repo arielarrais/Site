@@ -73,19 +73,28 @@ let selectedAssetId = null;
 const isAdmin = currentUser && currentUser.username === 'admin';
 
 const sortState = { acoes: { key: null, dir: 'asc' }, fiis: { key: null, dir: 'asc' } };
+let allAssets = [];
 
 async function loadAssets() {
   try {
-    const assets = await req('/api/admin/assets');
-    const acoes = filterAndSort(assets.filter(a => a.assettype === 'acao'), 'acoes');
-    const fiis = filterAndSort(assets.filter(a => a.assettype === 'fii'), 'fiis');
-    renderTable('acoes-tbody', acoes);
-    renderTable('fiis-tbody', fiis);
-    updateSortIndicators('acoes-table');
-    updateSortIndicators('fiis-table');
+    allAssets = await req('/api/admin/assets');
+    applyFilter();
   } catch (err) {
     alert('Erro ao carregar ativos: ' + err.message);
   }
+}
+
+function applyFilter() {
+  const q = document.getElementById('dividend-search').value.trim().toLowerCase();
+  const filtered = q ? allAssets.filter(a =>
+    a.ticker.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
+  ) : allAssets;
+  const acoes = filterAndSort(filtered.filter(a => a.assettype === 'acao'), 'acoes');
+  const fiis = filterAndSort(filtered.filter(a => a.assettype === 'fii'), 'fiis');
+  renderTable('acoes-tbody', acoes);
+  renderTable('fiis-tbody', fiis);
+  updateSortIndicators('acoes-table');
+  updateSortIndicators('fiis-table');
 }
 
 function filterAndSort(items, tableKey) {
@@ -132,6 +141,11 @@ document.querySelectorAll('.sortable thead th[data-sort]').forEach(th => {
     }
     loadAssets();
   });
+});
+
+document.getElementById('dividend-search-btn').addEventListener('click', applyFilter);
+document.getElementById('dividend-search').addEventListener('keyup', e => {
+  if (e.key === 'Enter') applyFilter();
 });
 
 function renderTable(tbodyId, assets) {
