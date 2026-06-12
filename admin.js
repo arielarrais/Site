@@ -95,6 +95,8 @@ function applyFilter() {
   renderTable('fiis-tbody', fiis);
   updateSortIndicators('acoes-table');
   updateSortIndicators('fiis-table');
+  document.getElementById('acoes-count').textContent = acoes.length + ' tickers';
+  document.getElementById('fiis-count').textContent = fiis.length + ' tickers';
 }
 
 function filterAndSort(items, tableKey) {
