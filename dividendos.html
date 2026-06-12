@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Usuarios</title>
+  <title>Dividendos</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="with-sidebar">
@@ -31,13 +31,17 @@
       </a>
       <a href="/lancamentos" class="sidebar-link" data-page="lancamentos">
         <span class="nav-icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
         </span>
         <span class="sidebar-expanded">Lançamentos</span>
       </a>
       <a href="/dividendos" class="sidebar-link" data-page="dividendos">
         <span class="nav-icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
         </span>
         <span class="sidebar-expanded">Dividendos</span>
       </a>
@@ -49,7 +53,7 @@
         </span>
         <span class="sidebar-expanded">Ativos</span>
       </a>
-      <a href="/usuarios" class="sidebar-link admin-only" data-page="usuarios">
+      <a href="/usuarios" class="sidebar-link admin-only hidden" data-page="usuarios">
         <span class="nav-icon">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -72,7 +76,7 @@
     </nav>
   </aside>
   <nav class="top-nav">
-    <div class="top-nav-brand">Usuarios</div>
+    <div class="top-nav-brand">Dividendos</div>
     <div class="top-nav-actions">
       <button id="logout-button" class="btn btn-danger">Sair</button>
     </div>
@@ -80,33 +84,33 @@
 
   <div class="container dashboard-active" id="main-container">
     <div class="card dashboard-card">
-      <div class="dashboard-header">
-        <h1>Usuarios cadastrados</h1>
-      </div>
       <div class="dashboard-content">
-        <div class="info-box">
-          <p class="small-note" style="margin-bottom:12px">Total de usuarios: <strong id="user-count">0</strong></p>
-          <div class="users-table-wrap">
-            <table class="users-table" id="users-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Usuario</th>
-                  <th>Nome</th>
-                  <th>Email</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody id="users-tbody">
-                <tr><td colspan="5" class="empty-message">Carregando...</td></tr>
-              </tbody>
-            </table>
+        <div class="portfolio-panel">
+          <div class="info-box">
+            <div class="portfolio-header">
+              <h2>Dividendos Recebidos</h2>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+              <input type="text" id="dividendos-filter" placeholder="Filtrar por ticker..." style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;flex:1;max-width:300px" />
+              <span id="dividendos-count" class="small-note"></span>
+            </div>
+            <div style="max-height:calc(100vh - 260px);overflow:auto">
+              <table class="admin-table" style="width:100%;font-size:13px">
+                <thead><tr>
+                  <th style="cursor:pointer" data-col="ticker">Ticker</th>
+                  <th style="cursor:pointer" data-col="month">Mês</th>
+                  <th>Total recebido (R$)</th>
+                  <th>Qtd</th>
+                </tr></thead>
+                <tbody id="dividendos-body"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="/usuarios.js"></script>
+  <script src="dividendos.js"></script>
 </body>
 </html>

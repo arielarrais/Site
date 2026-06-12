@@ -36,6 +36,9 @@ app.get('/dashboard', (req, res) => {
 app.get('/lancamentos', (req, res) => {
   res.sendFile(path.join(__dirname, 'lancamentos.html'));
 });
+app.get('/dividendos', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dividendos.html'));
+});
 
 app.use(express.static(path.join(__dirname)));
 
@@ -600,12 +603,13 @@ app.post('/api/assets/auto-create', async (req, res) => {
 app.get('/api/dividends', async (req, res) => {
   const assetId = Number(req.query.assetId);
   const ticker = (req.query.ticker || '').trim().toUpperCase();
+  const userId = Number(req.query.userId);
 
   try {
     let result;
     if (ticker) {
       result = await pool.query(
-        `SELECT d.id, d.assetid, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
+        `SELECT d.id, d.assetid, a.ticker, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
                 d.grossamount AS "grossAmount", d.netamount AS "netAmount",
                 d.description, d.type, d.createdat AS "createdAt"
          FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
@@ -614,24 +618,79 @@ app.get('/api/dividends', async (req, res) => {
       );
     } else if (assetId) {
       result = await pool.query(
-        `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
-                grossamount AS "grossAmount", netamount AS "netAmount",
-                description, type, createdat AS "createdAt"
-         FROM asset_dividends WHERE assetid = $1 ORDER BY paymentdate DESC`,
+        `SELECT d.id, d.assetid, a.ticker, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
+                d.grossamount AS "grossAmount", d.netamount AS "netAmount",
+                d.description, d.type, d.createdat AS "createdAt"
+         FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
+         WHERE d.assetid = $1 ORDER BY d.paymentdate DESC`,
         [assetId]
+      );
+    } else if (userId) {
+      result = await pool.query(
+        `SELECT d.id, d.assetid, a.ticker, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
+                d.grossamount AS "grossAmount", d.netamount AS "netAmount",
+                d.description, d.type, d.createdat AS "createdAt",
+                COALESCE(pos.position, 0) AS "sharesAtComDate",
+                d.grossamount * COALESCE(pos.position, 0) AS "totalReceived"
+         FROM asset_dividends d
+         JOIN b3_assets a ON d.assetid = a.id
+         LEFT JOIN LATERAL (
+           SELECT SUM(p.quantity) AS position
+           FROM portfolio_items p
+           WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
+         ) pos ON true
+         WHERE d.comdate IS NOT NULL
+           AND COALESCE(pos.position, 0) > 0
+         ORDER BY d.paymentdate DESC`,
+        [userId]
       );
     } else {
       result = await pool.query(
-        `SELECT id, assetid, comdate AS "comDate", paymentdate AS "paymentDate",
-                grossamount AS "grossAmount", netamount AS "netAmount",
-                description, type, createdat AS "createdAt"
-         FROM asset_dividends ORDER BY paymentdate DESC`
+        `SELECT d.id, d.assetid, a.ticker, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
+                d.grossamount AS "grossAmount", d.netamount AS "netAmount",
+                d.description, d.type, d.createdat AS "createdAt"
+         FROM asset_dividends d JOIN b3_assets a ON d.assetid = a.id
+         ORDER BY d.paymentdate DESC`
       );
     }
     res.json(result.rows);
   } catch (err) {
     console.error('Erro ao buscar dividendos:', err);
     res.status(500).json({ error: 'Erro ao buscar dividendos.' });
+  }
+});
+
+app.get('/api/dividends/monthly', async (req, res) => {
+  const userId = Number(req.query.userId);
+
+  try {
+    if (!userId) {
+      return res.status(400).json({ error: 'userId é obrigatório.' });
+    }
+
+    const result = await pool.query(
+      `SELECT a.ticker,
+              SUBSTRING(d.comdate, 1, 7) AS month,
+              SUM(d.grossamount * COALESCE(pos.position, 0)) AS total,
+              COUNT(*) AS count
+       FROM asset_dividends d
+       JOIN b3_assets a ON d.assetid = a.id
+       LEFT JOIN LATERAL (
+         SELECT SUM(p.quantity) AS position
+         FROM portfolio_items p
+         WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
+       ) pos ON true
+       WHERE d.comdate IS NOT NULL
+         AND COALESCE(pos.position, 0) > 0
+       GROUP BY a.ticker, SUBSTRING(d.comdate, 1, 7)
+       ORDER BY month DESC, a.ticker ASC`,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar dividendos mensais:', err);
+    res.status(500).json({ error: 'Erro ao buscar dividendos mensais.' });
   }
 });
 
