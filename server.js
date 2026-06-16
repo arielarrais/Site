@@ -5,6 +5,7 @@ const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { syncAllDividends } = require('./fetch_dividendos');
 const XLSX = require('xlsx');
 const fs = require('fs');
@@ -26,6 +27,33 @@ if (!databaseUrl) {
 const pool = new Pool({ connectionString: databaseUrl });
 
 app.use(express.json({ limit: '50mb' }));
+
+const jwtSecret = process.env.JWT_SECRET || 'fallback_secret_change_me';
+
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token não fornecido.' });
+  }
+  try {
+    const decoded = jwt.verify(header.split(' ')[1], jwtSecret);
+    req.user = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token inválido ou expirado.' });
+  }
+}
+
+async function logAudit(userId, username, action, details) {
+  try {
+    await pool.query(
+      'INSERT INTO audit_log (userid, username, action, details) VALUES ($1, $2, $3, $4)',
+      [userId, username, action, details]
+    );
+  } catch (err) {
+    console.error('Erro ao registrar auditoria:', err);
+  }
+}
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
@@ -93,6 +121,17 @@ async function initDb() {
       description TEXT,
       createdat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
       comdate TEXT
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id SERIAL PRIMARY KEY,
+      userid INTEGER,
+      username TEXT,
+      action TEXT,
+      details TEXT,
+      createdat TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
     )
   `);
 
@@ -249,7 +288,12 @@ app.post('/api/login', async (req, res) => {
     }
 
     const user = rows[0];
-    res.json({ id: user.id, username: user.username, fullName: user.fullname });
+    const token = jwt.sign(
+      { id: user.id, username: user.username, fullName: user.fullname },
+      jwtSecret,
+      { expiresIn: '24h' }
+    );
+    res.json({ id: user.id, username: user.username, fullName: user.fullname, token });
   } catch (err) {
     console.error('Erro ao buscar usuário:', err);
     res.status(500).json({ error: 'Erro interno do servidor.' });
@@ -496,7 +540,7 @@ app.get('/api/assets/types', async (req, res) => {
   }
 });
 
-app.post('/api/b3-assets', async (req, res) => {
+app.post('/api/b3-assets', authMiddleware, async (req, res) => {
   const { ticker, name, assetType } = req.body;
   if (!ticker || !name) {
     return res.status(400).json({ error: 'Ticker e nome são obrigatórios.' });
@@ -509,6 +553,7 @@ app.post('/api/b3-assets', async (req, res) => {
       [normalizedTicker, String(name).trim(), assetType ? String(assetType).trim() : null]
     );
     const item = result.rows[0];
+    logAudit(req.user.id, req.user.username, 'criar_ativo', `Ticker: ${item.ticker}, Nome: ${item.name}, Tipo: ${item.assettype}`);
     res.json({ id: item.id, ticker: item.ticker, name: item.name, assetType: item.assettype });
   } catch (err) {
     console.error('Erro ao salvar ativo B3:', err);
@@ -516,7 +561,7 @@ app.post('/api/b3-assets', async (req, res) => {
   }
 });
 
-app.post('/api/assets/auto-create', async (req, res) => {
+app.post('/api/assets/auto-create', authMiddleware, async (req, res) => {
   const { ticker } = req.body;
   if (!ticker) return res.status(400).json({ error: 'Ticker é obrigatório.' });
 

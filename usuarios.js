@@ -12,6 +12,10 @@ function clearUser() {
 
 async function req(url, method = 'GET', body = null) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const user = getUser();
+  if (user && user.token) {
+    opts.headers['Authorization'] = 'Bearer ' + user.token;
+  }
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const data = await res.json();
