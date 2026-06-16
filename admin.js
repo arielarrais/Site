@@ -87,7 +87,7 @@ async function loadAssets() {
 function applyFilter() {
   const q = document.getElementById('dividend-search').value.trim().toLowerCase();
   const filtered = q ? allAssets.filter(a =>
-    a.ticker.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
+    (a.ticker || '').toLowerCase().includes(q) || (a.name || '').toLowerCase().includes(q)
   ) : allAssets;
   const acoes = filterAndSort(filtered.filter(a => a.assettype === 'acao'), 'acoes');
   const fiis = filterAndSort(filtered.filter(a => a.assettype === 'fii'), 'fiis');
@@ -171,7 +171,7 @@ function renderTable(tbodyId, assets) {
     return `
     <tr>
       <td><strong><a href="#" class="ticker-link" data-ticker="${a.ticker}">${a.ticker}</a></strong></td>
-      <td>${a.name}</td>
+      <td>${a.name || ''}</td>
       ${isFii ? `<td>${fiitype}</td>` : ''}
       <td>${formatDateBR(a.lastcomdate)}</td>
       <td>${formatDateBR(a.lastdividenddate)}</td>
