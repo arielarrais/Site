@@ -272,6 +272,7 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
   btn.disabled = true;
   btn.textContent = 'Sincronizando...';
   startLabel.className = 'process-status start';
+  startLabel.style.display = 'block';
   startLabel.textContent = 'Iniciando processo de busca de dividendos...';
   finishLabel.className = 'process-status';
   finishLabel.textContent = '';
