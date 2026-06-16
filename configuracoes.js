@@ -263,7 +263,7 @@ if (syncBtn) {
 }
 
 // === Fetch All Dividends ===
-document.getElementById('fetch-all-dividends-btn').addEventListener('click', () => {
+document.getElementById('fetch-all-dividends-btn').addEventListener('click', async () => {
   const btn = document.getElementById('fetch-all-dividends-btn');
   const startLabel = document.getElementById('fetch-all-dividends-start');
   const finishLabel = document.getElementById('fetch-all-dividends-finish');
@@ -273,58 +273,31 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', () 
   btn.textContent = 'Sincronizando...';
   startLabel.className = 'process-status start';
   startLabel.style.display = 'block';
-  startLabel.textContent = 'Iniciando processo de busca de dividendos...';
+  startLabel.textContent = 'Iniciando...';
   finishLabel.className = 'process-status';
   finishLabel.textContent = '';
   finishLabel.style.display = 'none';
   log.style.display = 'block';
   log.textContent = '';
 
-  const evtSource = new EventSource('/api/admin/fetch-all-dividends/stream');
-
-  evtSource.addEventListener('start', (e) => {
-    const data = JSON.parse(e.data);
-    startLabel.textContent = `Processando ${data.total} ativos...`;
-  });
-
-  evtSource.addEventListener('progress', (e) => {
-    const data = JSON.parse(e.data);
-    log.textContent += `[${data.current}/${data.total}] ${data.ticker}: ${data.source} | +${data.inserted} ~${data.updated} -${data.skipped}\n`;
-    log.scrollTop = log.scrollHeight;
-  });
-
-  evtSource.addEventListener('done', (e) => {
-    const data = JSON.parse(e.data);
-    const hasErrors = data.errors > 0;
+  try {
+    const data = await req('/api/admin/fetch-all-dividends', 'POST');
     startLabel.className = 'process-status finish';
-    startLabel.textContent = `Fetch-all concluído: ${data.totalInserted} novos, ${data.totalUpdated} atualizados, ${data.totalSkipped} ignorados, ${data.errors} erros.`;
-    finishLabel.className = 'process-status' + (hasErrors ? ' error' : ' finish');
-    finishLabel.textContent = hasErrors ? `${data.errors} erro(s) encontrados` : 'Processo finalizado com sucesso';
-    btn.disabled = false;
-    btn.textContent = 'Atualizar todos os dividendos';
-    evtSource.close();
-  });
-
-  evtSource.addEventListener('error', () => {
+    startLabel.textContent = `Processando ${data.total} ativos em segundo plano. Verifique o console do servidor quando finalizar.`;
+    finishLabel.style.display = 'block';
+    finishLabel.className = 'process-status';
+    finishLabel.textContent = data.message;
+    log.textContent += `${data.total} ativos sendo sincronizados...\n`;
+  } catch (err) {
     startLabel.className = 'process-status error';
-    startLabel.textContent = 'Erro de conexão';
+    startLabel.textContent = 'Erro ao iniciar';
+    finishLabel.style.display = 'block';
     finishLabel.className = 'process-status error';
-    finishLabel.textContent = 'Falha na conexão com o servidor';
-    btn.disabled = false;
-    btn.textContent = 'Atualizar todos os dividendos';
-    evtSource.close();
-  });
+    finishLabel.textContent = err.message || 'Falha na conexão com o servidor';
+  }
 
-  evtSource.addEventListener('fail', (e) => {
-    const data = JSON.parse(e.data);
-    startLabel.className = 'process-status error';
-    startLabel.textContent = 'Erro no servidor';
-    finishLabel.className = 'process-status error';
-    finishLabel.textContent = data.error || 'falha no servidor';
-    btn.disabled = false;
-    btn.textContent = 'Atualizar todos os dividendos';
-    evtSource.close();
-  });
+  btn.disabled = false;
+  btn.textContent = 'Atualizar todos os dividendos';
 });
 
 // === Fix Payment Dates ===
