@@ -475,10 +475,12 @@ if (isDashboard) {
           const itemCost = (item.purchasePrice ?? itemCurrentPrice) * item.quantity;
           const itemProfitLoss = itemValue - itemCost;
           const cells2 = detailRow.querySelectorAll('.grid-detail-cell');
-          if (cells2.length >= 5) {
-            cells2[2].querySelector('span:last-child').textContent = formatCurrency(item.purchasePrice ?? itemCurrentPrice);
-            cells2[3].querySelector('span:last-child').textContent = formatCurrency(itemCost);
-            cells2[4].querySelector('span:last-child').textContent = formatCurrency(itemProfitLoss);
+          if (cells2.length >= 6) {
+            cells2[2].querySelector('span:last-child').textContent = item.quantity;
+            cells2[3].querySelector('span:last-child').textContent = formatCurrency(item.purchasePrice ?? itemCurrentPrice);
+            cells2[4].querySelector('span:last-child').textContent = formatCurrency(itemCost);
+            cells2[5].querySelector('span:last-child').textContent = formatCurrency(itemProfitLoss);
+            cells2[5].querySelector('span:last-child').className = itemProfitLoss >= 0 ? 'profit' : 'loss';
           }
         });
       }

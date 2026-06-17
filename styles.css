@@ -582,7 +582,7 @@ input:focus {
 
 .grid-detail-row {
   display: grid;
-  grid-template-columns: 170px 110px 120px 130px 130px 130px 130px 100px;
+  grid-template-columns: 120px 90px 80px 140px 140px 140px 130px 100px;
   column-gap: 2px;
   border-top: 1px solid #e0e0e0;
 }
@@ -597,7 +597,10 @@ input:focus {
 }
 
 .detail-label {
-  display: none;
+  font-weight: 600;
+  color: #888;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .grid-detail-cell .profit {
