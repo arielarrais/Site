@@ -1467,6 +1467,15 @@ body.with-sidebar.sidebar-collapsed {
   .settings-option div strong {
     font-size: 14px;
   }
+
+  .modal {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: 20px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1512,6 +1521,12 @@ body.with-sidebar.sidebar-collapsed {
   .modal {
     padding: 14px;
     width: 95%;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: 20px;
   }
 
   .add-launch-inner {
