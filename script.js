@@ -151,6 +151,19 @@ if (isDashboard) {
     });
   }
 
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  if (sidebar && mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle('mobile-open');
+    });
+    document.addEventListener('click', (e) => {
+      if (sidebar.classList.contains('mobile-open') && !sidebar.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+        sidebar.classList.remove('mobile-open');
+      }
+    });
+  }
+
   const portfolioPanel = document.getElementById('portfolio-panel');
   const assetSearchForm = document.getElementById('asset-search-form');
   const assetQueryInput = document.getElementById('asset-query');

@@ -72,6 +72,19 @@ if (sidebar && toggleBtn) {
   });
 }
 
+const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+if (sidebar && mobileMenuBtn) {
+  mobileMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sidebar.classList.toggle('mobile-open');
+  });
+  document.addEventListener('click', (e) => {
+    if (sidebar.classList.contains('mobile-open') && !sidebar.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+      sidebar.classList.remove('mobile-open');
+    }
+  });
+}
+
 let selectedAssetId = null;
 
 const isAdmin = currentUser && currentUser.username === 'admin';
