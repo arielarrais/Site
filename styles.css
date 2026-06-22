@@ -1545,3 +1545,31 @@ body.with-sidebar.sidebar-collapsed {
     width: 100%;
   }
 }
+
+@media (min-width: 768px) and (max-width: 899px) {
+  .sidebar-header .toggle-icon {
+    display: none;
+  }
+  .sidebar.collapsed {
+    width: 220px !important;
+  }
+  .sidebar.collapsed .sidebar-expanded {
+    display: inline-flex !important;
+    width: auto !important;
+    opacity: 1 !important;
+  }
+  .sidebar.collapsed .sidebar-collapsed-only {
+    display: none !important;
+  }
+  .sidebar.collapsed .sidebar-nav a {
+    justify-content: flex-start !important;
+    padding: 10px 12px !important;
+  }
+  .sidebar.collapsed .sidebar-header {
+    padding: 14px 20px !important;
+    justify-content: flex-start !important;
+  }
+  body.with-sidebar.sidebar-collapsed {
+    padding: 80px 20px 20px 240px;
+  }
+}

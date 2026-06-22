@@ -39,11 +39,12 @@
   var sidebar = document.getElementById('sidebar');
   var toggleBtn = document.getElementById('sidebar-toggle');
   if (sidebar && toggleBtn) {
-    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    if (localStorage.getItem('sidebar-collapsed') === 'true' && window.innerWidth >= 900) {
       sidebar.classList.add('collapsed');
       document.body.classList.add('sidebar-collapsed');
     }
     toggleBtn.addEventListener('click', function () {
+      if (window.innerWidth < 900) return;
       var collapsed = sidebar.classList.toggle('collapsed');
       document.body.classList.toggle('sidebar-collapsed', collapsed);
       localStorage.setItem('sidebar-collapsed', String(collapsed));
