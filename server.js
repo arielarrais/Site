@@ -327,7 +327,7 @@ app.get('/api/portfolio/dividend-returns', async (req, res) => {
       `SELECT a.ticker,
         COALESCE(SUM(
           d.grossamount * (
-            SELECT COALESCE(SUM(p.quantity), 0)
+            SELECT COALESCE(SUM(CASE WHEN p.movement_type = 'venda' THEN -p.quantity ELSE p.quantity END), 0)
             FROM portfolio_items p
             WHERE p.ticker = a.ticker AND p.userid = $1 AND p.purchasedat <= d.comdate
           )
@@ -679,17 +679,17 @@ app.get('/api/dividends', async (req, res) => {
                 d.grossamount * COALESCE(pos.position, 0) AS "totalReceived"
          FROM asset_dividends d
          JOIN b3_assets a ON d.assetid = a.id
-         LEFT JOIN LATERAL (
-           SELECT SUM(p.quantity) AS position
-           FROM portfolio_items p
-           WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
-         ) pos ON true
-         WHERE d.comdate IS NOT NULL
-           AND COALESCE(pos.position, 0) > 0
-         ORDER BY d.paymentdate DESC`,
-        [userId]
-      );
-    } else {
+          LEFT JOIN LATERAL (
+            SELECT SUM(CASE WHEN p.movement_type = 'venda' THEN -p.quantity ELSE p.quantity END) AS position
+            FROM portfolio_items p
+            WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
+          ) pos ON true
+          WHERE d.comdate IS NOT NULL
+            AND COALESCE(pos.position, 0) > 0
+          ORDER BY d.paymentdate DESC`,
+         [userId]
+       );
+     } else {
       result = await pool.query(
         `SELECT d.id, d.assetid, a.ticker, d.comdate AS "comDate", d.paymentdate AS "paymentDate",
                 d.grossamount AS "grossAmount", d.netamount AS "netAmount",
@@ -721,13 +721,13 @@ app.get('/api/dividends/monthly', async (req, res) => {
        FROM asset_dividends d
        JOIN b3_assets a ON d.assetid = a.id
        LEFT JOIN LATERAL (
-         SELECT SUM(p.quantity) AS position
-         FROM portfolio_items p
-         WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
-       ) pos ON true
-       WHERE d.comdate IS NOT NULL
-         AND COALESCE(pos.position, 0) > 0
-       GROUP BY a.ticker, SUBSTRING(d.comdate, 1, 7)
+          SELECT SUM(CASE WHEN p.movement_type = 'venda' THEN -p.quantity ELSE p.quantity END) AS position
+          FROM portfolio_items p
+          WHERE p.userid = $1 AND p.ticker = a.ticker AND p.purchasedat <= d.comdate
+        ) pos ON true
+        WHERE d.comdate IS NOT NULL
+          AND COALESCE(pos.position, 0) > 0
+        GROUP BY a.ticker, SUBSTRING(d.comdate, 1, 7)
        ORDER BY month DESC, a.ticker ASC`,
       [userId]
     );

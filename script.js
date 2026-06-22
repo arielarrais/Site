@@ -431,8 +431,9 @@ if (isDashboard) {
     const grouped = Object.values(portfolio.reduce((acc, item) => {
       if (!acc[item.ticker]) acc[item.ticker] = { ticker: item.ticker, items: [], totalQuantity: 0, totalCost: 0 };
       acc[item.ticker].items.push(item);
-      acc[item.ticker].totalQuantity += item.quantity;
-      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
+      const mult = item.movementType === 'venda' ? -1 : 1;
+      acc[item.ticker].totalQuantity += item.quantity * mult;
+      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity * mult;
       return acc;
     }, {})).filter(g => g.totalQuantity !== 0);
 
@@ -846,7 +847,7 @@ if (isDashboard) {
                 </div>
                 <div class="grid-detail-cell">
                   <span class="detail-label">Qtd</span>
-                  <span>${item.quantity}</span>
+                  <span style="color:${item.movementType === 'venda' ? '#e74c3c' : '#1a1a2e'}">${item.movementType === 'venda' ? -Math.abs(item.quantity) : Math.abs(item.quantity)}</span>
                 </div>
                 <div class="grid-detail-cell">
                   <span class="detail-label">Preço pago</span>
@@ -969,8 +970,9 @@ if (isDashboard) {
         acc[item.ticker] = { ticker: item.ticker, items: [], totalQuantity: 0, totalCost: 0 };
       }
       acc[item.ticker].items.push(item);
-      acc[item.ticker].totalQuantity += item.quantity;
-      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity;
+      const mult = item.movementType === 'venda' ? -1 : 1;
+      acc[item.ticker].totalQuantity += item.quantity * mult;
+      acc[item.ticker].totalCost += (item.purchasePrice ?? 0) * item.quantity * mult;
       return acc;
     }, {})).filter(g => g.totalQuantity !== 0);
 

@@ -84,13 +84,17 @@
     for (var i = 0; i < filtered.length; i++) {
       var a = filtered[i];
       var dateStr = a.purchaseDate ? a.purchaseDate.split('T')[0] : '—';
-      var color = a.quantity < 0 ? '#e74c3c' : '#27ae60';
-      html += '<tr><td>' + dateStr + '</td><td>' + a.ticker + '</td><td>' + (typeLabels[a.movementType] || a.movementType) + '</td><td style="color:' + color + ';font-weight:600">' + a.quantity + '</td><td>R$ ' + Number(a.purchasePrice || 0).toFixed(2) + '</td><td>' + (a.institution || '—') + '</td></tr>';
+      var displayQty = a.movementType === 'venda' ? -Math.abs(a.quantity) : Math.abs(a.quantity);
+      var color = displayQty < 0 ? '#e74c3c' : '#27ae60';
+      html += '<tr><td>' + dateStr + '</td><td>' + a.ticker + '</td><td>' + (typeLabels[a.movementType] || a.movementType) + '</td><td style="color:' + color + ';font-weight:600">' + displayQty + '</td><td>R$ ' + Number(a.purchasePrice || 0).toFixed(2) + '</td><td>' + (a.institution || '—') + '</td></tr>';
     }
     tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;padding:24px;color:#999">Nenhum lançamento encontrado.</td></tr>';
   }
 
   filterInput.addEventListener('input', function () { if (allItems.length) render(allItems); });
+
+  var sortCol = 'purchaseDate';
+  var sortDir = 'desc';
 
   if (tbody) {
     var table = tbody.closest('table');
@@ -98,12 +102,24 @@
       table.querySelectorAll('th[data-col]').forEach(function (th) {
         th.addEventListener('click', function () {
           var col = th.dataset.col;
+          if (col === sortCol) {
+            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortCol = col;
+            sortDir = 'asc';
+          }
+          table.querySelectorAll('th[data-col]').forEach(function (h) {
+            h.classList.remove('sort-asc', 'sort-desc');
+            h.querySelector('.sort-arrows').textContent = ' ⇅';
+          });
+          th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+          th.querySelector('.sort-arrows').textContent = sortDir === 'asc' ? ' ▲' : ' ▼';
           var sorted = allItems.slice().sort(function (a, b) {
-            var va = a[col], vb = b[col];
+            var va = a[sortCol], vb = b[sortCol];
             if (va == null) va = '';
             if (vb == null) vb = '';
-            if (typeof va === 'number') return va - vb;
-            return String(va).localeCompare(String(vb));
+            var cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+            return sortDir === 'desc' ? -cmp : cmp;
           });
           render(sorted);
         });
@@ -119,7 +135,8 @@
       var item = items[i];
       var m = (item.purchaseDate || '').substring(0, 7);
       if (!m) continue;
-      monthly[m] = (monthly[m] || 0) + (item.purchasePrice || 0) * item.quantity;
+      var mult = item.movementType === 'venda' ? -1 : 1;
+      monthly[m] = (monthly[m] || 0) + (item.purchasePrice || 0) * item.quantity * mult;
     }
     var labels = Object.keys(monthly).sort();
     var data = labels.map(function (m) { return monthly[m]; });
@@ -176,6 +193,10 @@
         movementType: item.movementType || 'compra',
         institution: item.institution || ''
       };
+    });
+    allItems.sort(function (a, b) {
+      var va = a[sortCol] || '', vb = b[sortCol] || '';
+      return sortDir === 'desc' ? String(vb).localeCompare(String(va)) : String(va).localeCompare(String(vb));
     });
     render(allItems);
     renderInvestChart(allItems);
