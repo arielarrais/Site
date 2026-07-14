@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 app.get('/lancamentos', (req, res) => {
   res.sendFile(path.join(__dirname, 'lancamentos.html'));
