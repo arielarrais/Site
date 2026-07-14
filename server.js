@@ -68,7 +68,7 @@ app.get('/dividendos', (req, res) => {
   res.sendFile(path.join(__dirname, 'dividendos.html'));
 });
 
-app.use(express.static(path.join(__dirname), { index: false }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const brapiTokenStatus = process.env.BRAPI_TOKEN ? 'loaded' : 'missing';
 console.log(`BRAPI_TOKEN ${brapiTokenStatus}`);
