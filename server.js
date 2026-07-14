@@ -300,6 +300,10 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.get('/api/auth/validate', authMiddleware, (req, res) => {
+  res.json({ id: req.user.id, username: req.user.username, fullName: req.user.fullName });
+});
+
 app.get('/api/portfolio', async (req, res) => {
   const userId = Number(req.query.userId);
   if (!userId) {

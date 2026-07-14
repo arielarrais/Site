@@ -1,10 +1,26 @@
-(function () {
+(async function () {
   function getUser() {
     const stored = localStorage.getItem('site-login-authenticated');
-    return stored ? JSON.parse(stored) : null;
+    if (!stored) return null;
+    try {
+      const user = JSON.parse(stored);
+      if (!user || !user.token) { localStorage.removeItem('site-login-authenticated'); return null; }
+      const payload = JSON.parse(atob(user.token.split('.')[1]));
+      if (payload.exp * 1000 < Date.now()) { localStorage.removeItem('site-login-authenticated'); return null; }
+      return user;
+    } catch { localStorage.removeItem('site-login-authenticated'); return null; }
   }
   function clearUser() {
     localStorage.removeItem('site-login-authenticated');
+  }
+  async function validateToken() {
+    const user = getUser();
+    if (!user) return null;
+    try {
+      const res = await fetch('/api/auth/validate', { headers: { 'Authorization': 'Bearer ' + user.token } });
+      if (!res.ok) { clearUser(); window.location.href = '/'; return null; }
+      return user;
+    } catch { clearUser(); window.location.href = '/'; return null; }
   }
   async function req(url, method, body) {
     const opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
@@ -19,11 +35,8 @@
     return data;
   }
 
-  const currentUser = getUser();
-  if (!currentUser) {
-    window.location.href = '/';
-    return;
-  }
+  const currentUser = await validateToken();
+  if (!currentUser) return;
 
   document.getElementById('display-user').textContent = currentUser.fullName || currentUser.username;
 

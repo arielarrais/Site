@@ -3,11 +3,28 @@ const authKey = 'site-login-authenticated';
 
 function getUser() {
   const stored = localStorage.getItem(authKey);
-  return stored ? JSON.parse(stored) : null;
+  if (!stored) return null;
+  try {
+    const user = JSON.parse(stored);
+    if (!user || !user.token) { localStorage.removeItem(authKey); return null; }
+    const payload = JSON.parse(atob(user.token.split('.')[1]));
+    if (payload.exp * 1000 < Date.now()) { localStorage.removeItem(authKey); return null; }
+    return user;
+  } catch { localStorage.removeItem(authKey); return null; }
 }
 
 function clearUser() {
   localStorage.removeItem(authKey);
+}
+
+async function validateToken() {
+  const user = getUser();
+  if (!user) return null;
+  try {
+    const res = await fetch('/api/auth/validate', { headers: { 'Authorization': 'Bearer ' + user.token } });
+    if (!res.ok) { clearUser(); window.location.href = '/'; return null; }
+    return user;
+  } catch { clearUser(); window.location.href = '/'; return null; }
 }
 
 async function req(url, method = 'GET', body = null) {
@@ -23,10 +40,9 @@ async function req(url, method = 'GET', body = null) {
   return data;
 }
 
-let currentUser = getUser();
-if (!currentUser) {
-  window.location.href = '/';
-}
+(async () => {
+let currentUser = await validateToken();
+if (!currentUser) return;
 
 const isAdmin = currentUser && currentUser.username === 'admin';
 if (!isAdmin) {
@@ -98,3 +114,5 @@ async function loadUsers() {
 }
 
 loadUsers();
+
+})();
