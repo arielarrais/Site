@@ -24,7 +24,10 @@ if (!databaseUrl) {
   console.error('ERRO: DATABASE_URL não definida. Configure a variável de ambiente.');
   process.exit(1);
 }
-const pool = new Pool({ connectionString: databaseUrl });
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: databaseUrl.includes('render.com') ? { rejectUnauthorized: false } : false
+});
 
 app.use(express.json({ limit: '50mb' }));
 
