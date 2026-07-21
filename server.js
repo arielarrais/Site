@@ -1711,6 +1711,76 @@ async function seedAssetsDatabase() {
   console.log(`${count} ativos inseridos no banco.`);
 }
 
+// ===================== IMPORT TICKERS =====================
+app.post('/api/admin/import-tickers', async (req, res) => {
+  try {
+    const { fileBase64, csvText, fileExt } = req.body;
+
+    let rows = [];
+
+    if (fileExt === 'csv' && csvText) {
+      const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return res.json({ error: 'CSV vazio ou sem dados.' });
+      const sep = lines[0].includes(';') ? ';' : ',';
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(sep).map(p => p.replace(/^"|"$/g, '').trim());
+        if (parts.length >= 2 && parts[0]) {
+          rows.push({ ticker: parts[0], name: parts[1] || '', sector: parts[3] || parts[2] || '' });
+        }
+      }
+    } else if (fileExt === 'xlsx' && fileBase64) {
+      const buf = Buffer.from(fileBase64, 'base64');
+      const wb = XLSX.read(buf, { type: 'buffer' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws);
+      for (const r of data) {
+        const ticker = r['Ticker'] || r['ticker'] || '';
+        if (ticker) {
+          rows.push({
+            ticker: String(ticker).trim(),
+            name: String(r['Nome'] || r['name'] || '').trim(),
+            sector: String(r['Setor'] || r['sector'] || r['Subsetor'] || '').trim()
+          });
+        }
+      }
+    } else {
+      return res.json({ error: 'Formato invalido. Envie csvText+csv ou fileBase64+xlsx.' });
+    }
+
+    if (!rows.length) return res.json({ error: 'Nenhum ticker encontrado no arquivo.' });
+
+    let inserted = 0, updated = 0;
+    const logLines = [];
+
+    for (const row of rows) {
+      const ticker = row.ticker.toUpperCase();
+      const existing = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [ticker]);
+      if (existing.rows.length > 0) {
+        await pool.query(
+          'UPDATE b3_assets SET name = COALESCE(NULLIF($1, ''), name), sector = COALESCE(NULLIF($2, ''), sector) WHERE ticker = $3',
+          [row.name, row.sector, ticker]
+        );
+        updated++;
+        logLines.push(`  ${ticker} -> atualizado`);
+      } else {
+        const assettype = ticker.endsWith('11') ? 'fii' : 'acao';
+        await pool.query(
+          'INSERT INTO b3_assets (ticker, name, assettype, sector) VALUES ($1, $2, $3, $4)',
+          [ticker, row.name || ticker, assettype, row.sector || '']
+        );
+        inserted++;
+        logLines.push(`  ${ticker} -> inserido (${assettype})`);
+      }
+    }
+
+    console.log(`Import tickers: ${inserted} inseridos, ${updated} atualizados de ${rows.length}`);
+    res.json({ inserted, updated, total: rows.length, log: logLines.join('\n') });
+  } catch (err) {
+    console.error('Erro ao importar tickers:', err);
+    res.status(500).json({ error: 'Erro ao importar tickers: ' + err.message });
+  }
+});
+
 app.listen(port, '0.0.0.0', async () => {
   try {
     await initDb();

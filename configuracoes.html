@@ -69,7 +69,7 @@
   </nav>
 
   <div class="container dashboard-active" id="main-container">
-    <div class="card dashboard-card">
+    <div class="card dashboard-card admin-only hidden">
       <div class="dashboard-header">
         <h1>Configurações</h1>
       </div>
@@ -150,7 +150,35 @@
       </div>
     </div>
 
-    <div class="card dashboard-card" style="margin-top:20px">
+    <div class="card dashboard-card admin-only hidden" style="margin-top:20px">
+      <div class="dashboard-header">
+        <h1>Atualizar tickers</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Importar tickers das planilhas</h3>
+          <p class="small-note" style="margin-bottom:12px">Importa a lista de FIIs e ações das planilhas geradas (<code>Tickers/fiis_b3.csv</code> e <code>Tickers/acoes_b3.csv</code>) para o banco de dados. Tickers já cadastrados serão atualizados com nome e setor.</p>
+
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+            <div style="flex:1;min-width:280px;border:2px dashed #ccc;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#fafafa" id="tickers-dropzone" data-type="fii">
+              <p style="margin:0;font-size:14px;color:#666">Arraste ou clique para selecionar <strong>FIIs</strong></p>
+              <p style="margin:4px 0 0;font-size:12px;color:#999">fiis_b3.csv ou .xlsx</p>
+              <input id="tickers-fii-input" type="file" accept=".csv,.xlsx" style="display:none" />
+            </div>
+            <div style="flex:1;min-width:280px;border:2px dashed #ccc;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#fafafa" id="tickers-dropzone-acao">
+              <p style="margin:0;font-size:14px;color:#666">Arraste ou clique para selecionar <strong>Ações</strong></p>
+              <p style="margin:4px 0 0;font-size:12px;color:#999">acoes_b3.csv ou .xlsx</p>
+              <input id="tickers-acao-input" type="file" accept=".csv,.xlsx" style="display:none" />
+            </div>
+          </div>
+
+          <div id="tickers-status" class="small-note" style="margin:8px 0"></div>
+          <div id="tickers-log" style="margin-top:8px;max-height:300px;overflow:auto;font-size:12px;background:#f5f5f5;padding:8px;border-radius:4px;display:none;white-space:pre-wrap;font-family:monospace"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card dashboard-card admin-only hidden" style="margin-top:20px">
       <div class="dashboard-header">
         <h1>Atualizar todos os ativos</h1>
       </div>
