@@ -150,6 +150,21 @@
       </div>
     </div>
 
+    <div class="card dashboard-card admin-only hidden" style="margin-top:20px">
+      <div class="dashboard-header">
+        <h1>Sincronizar tickers da planilha</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Importar tickers da Google Sheets</h3>
+          <p class="small-note" style="margin-bottom:12px">Le a planilha do Google Sheets configurada como fonte de precos e importa todos os tickers encontrados para o banco de dados. Tickers ja cadastrados serao atualizados com nome e preco.</p>
+          <button id="sync-tickers-sheet-btn" class="btn btn-primary" style="width:auto">Sincronizar tickers</button>
+          <div id="sync-tickers-sheet-status" class="process-status" style="display:none"></div>
+          <div id="sync-tickers-sheet-log" style="margin-top:8px;max-height:300px;overflow:auto;font-size:12px;background:#f5f5f5;padding:8px;border-radius:4px;display:none;white-space:pre-wrap;font-family:monospace"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card dashboard-card" style="margin-top:20px">
       <div class="dashboard-header">
         <h1>Atualizar todos os ativos</h1>

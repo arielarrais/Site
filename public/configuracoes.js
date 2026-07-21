@@ -43,6 +43,11 @@ async function req(url, method, body) {
 const currentUser = await validateToken();
 if (!currentUser) return;
 
+const isAdmin = currentUser.username === 'admin';
+if (isAdmin) {
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
+}
+
 document.querySelectorAll('.sidebar-link').forEach(el => {
   if (el.dataset.page === 'configuracoes') el.classList.add('active');
 });
@@ -354,6 +359,34 @@ if (fixBtn) {
   btn.disabled = false;
   });
 }
+
+// === Sync Tickers from Sheet ===
+document.getElementById('sync-tickers-sheet-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('sync-tickers-sheet-btn');
+  const status = document.getElementById('sync-tickers-sheet-status');
+  const log = document.getElementById('sync-tickers-sheet-log');
+
+  btn.disabled = true;
+  btn.textContent = 'Sincronizando...';
+  status.style.display = 'block';
+  status.className = 'process-status start';
+  status.textContent = 'Lendo planilha e sincronizando tickers...';
+  log.style.display = 'block';
+  log.textContent = '';
+
+  try {
+    const data = await req('/api/admin/sync-tickers-sheet', 'POST');
+    status.className = 'process-status finish';
+    status.textContent = `Concluido: ${data.inserted} inserido(s), ${data.updated} atualizado(s) de ${data.total} ticker(s).`;
+    log.textContent = data.log || '';
+  } catch (err) {
+    status.className = 'process-status error';
+    status.textContent = 'Erro: ' + (err.message || 'falha na conexao');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Sincronizar tickers';
+});
 
 })();
 
