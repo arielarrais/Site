@@ -43,11 +43,6 @@ async function req(url, method, body) {
 const currentUser = await validateToken();
 if (!currentUser) return;
 
-const isAdmin = currentUser.username === 'admin';
-if (isAdmin) {
-  document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
-}
-
 document.querySelectorAll('.sidebar-link').forEach(el => {
   if (el.dataset.page === 'configuracoes') el.classList.add('active');
 });
@@ -359,85 +354,6 @@ if (fixBtn) {
   btn.disabled = false;
   });
 }
-
-// === Import Tickers ===
-function setupTickersImport(inputId, dropzoneId) {
-  const fileInput = document.getElementById(inputId);
-  const dropzone = document.getElementById(dropzoneId);
-  const status = document.getElementById('tickers-status');
-  const log = document.getElementById('tickers-log');
-  if (!fileInput || !dropzone) return;
-
-  dropzone.addEventListener('click', () => fileInput.click());
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.style.borderColor = '#1a73e8';
-    dropzone.style.background = '#e8f0fe';
-  });
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.style.borderColor = '#ccc';
-    dropzone.style.background = '#fafafa';
-  });
-  dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.style.borderColor = '#ccc';
-    dropzone.style.background = '#fafafa';
-    if (e.dataTransfer.files.length > 0) importTickers(e.dataTransfer.files[0]);
-  });
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) importTickers(fileInput.files[0]);
-    fileInput.value = '';
-  });
-
-  async function importTickers(file) {
-    const isXlsx = file.name.endsWith('.xlsx');
-    const isCsv = file.name.endsWith('.csv');
-    if (!isXlsx && !isCsv) {
-      status.textContent = 'Selecione um arquivo .csv ou .xlsx.';
-      status.style.color = '#e74c3c';
-      return;
-    }
-
-    status.textContent = 'Lendo arquivo...';
-    status.style.color = '#888';
-    log.style.display = 'block';
-    log.textContent = '';
-
-    try {
-      let rows;
-      if (isXlsx) {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
-          reader.readAsDataURL(file);
-        });
-        const data = await req('/api/admin/import-tickers', 'POST', { fileBase64: base64, fileExt: 'xlsx' });
-        rows = data;
-      } else {
-        const text = await file.text();
-        const data = await req('/api/admin/import-tickers', 'POST', { csvText: text, fileExt: 'csv' });
-        rows = data;
-      }
-
-      if (rows.error) {
-        status.textContent = rows.error;
-        status.style.color = '#e74c3c';
-        return;
-      }
-
-      status.textContent = `Importacao concluida: ${rows.inserted} inserido(s), ${rows.updated} atualizado(s) de ${rows.total} registro(s).`;
-      status.style.color = '#27ae60';
-      log.textContent = rows.log || '';
-    } catch (err) {
-      status.textContent = 'Erro: ' + (err.message || 'falha na conexao');
-      status.style.color = '#e74c3c';
-    }
-  }
-}
-
-setupTickersImport('tickers-fii-input', 'tickers-dropzone');
-setupTickersImport('tickers-acao-input', 'tickers-dropzone-acao');
 
 })();
 
