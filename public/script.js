@@ -448,11 +448,11 @@ if (isDashboard) {
     try {
       const quotes = await fetchQuotes(tickers);
       Object.entries(quotes).forEach(([ticker, quote]) => {
-        const price = quote.price;
-        latestPrices.set(ticker, price);
+        const price = quote.price || 0;
+        if (price) latestPrices.set(ticker, price);
         if (assetByTicker.has(ticker)) {
           const asset = assetByTicker.get(ticker);
-          asset.price = price;
+          if (price) asset.price = price;
           if (quote.name) asset.name = quote.name;
         } else {
           assetByTicker.set(ticker, { ticker, name: quote.name || ticker, price });
