@@ -1467,6 +1467,28 @@ async function fetchSheetCSV(csvUrl) {
   return csv.split('\n').filter(l => l.trim());
 }
 
+function csvSplitLine(line, sep) {
+  if (sep === '\t') return line.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+  const fields = [];
+  let cur = '';
+  let inQuote = false;
+  for (let j = 0; j < line.length; j++) {
+    const ch = line[j];
+    if (inQuote) {
+      if (ch === '"') {
+        if (j + 1 < line.length && line[j + 1] === '"') { cur += '"'; j++; }
+        else { inQuote = false; }
+      } else { cur += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === sep) { fields.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+  }
+  fields.push(cur.trim());
+  return fields.map(c => c.replace(/^"|"$/g, ''));
+}
+
 function parseSheetRows(lines) {
   if (!lines.length) return [];
   const headerLine = lines[0];
@@ -1474,13 +1496,17 @@ function parseSheetRows(lines) {
   for (const s of [',', ';', '\t']) {
     if (headerLine.split(s).length >= 3) { sep = s; break; }
   }
-  const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+  const headers = csvSplitLine(headerLine, sep);
   const fundosIdx = headers.findIndex(h =>
     h.toUpperCase().includes('FUNDO') || h.toUpperCase() === 'TICKER' || h.toUpperCase() === 'ATIVO' || h.toUpperCase() === 'AÇÃO' || h.toUpperCase() === 'ACAO'
   );
   const precoIdx = headers.findIndex(h =>
     h.toUpperCase().includes('PREÇO') || h.toUpperCase().includes('PRECO') || h.toUpperCase().includes('ATUAL')
   );
+  const precoIndices = headers
+    .map((h, i) => ({ h, i }))
+    .filter(x => x.h.toUpperCase().includes('PREÇO') || x.h.toUpperCase().includes('PRECO') || x.h.toUpperCase().includes('PREÇ') || x.h.toUpperCase().includes('ATUAL'))
+    .map(x => x.i);
   const nomeIdx = headers.findIndex(h =>
     h.toUpperCase() === 'NOME' || h.toUpperCase().includes('NOME') || h.toUpperCase().includes('NAME')
   );
@@ -1489,12 +1515,20 @@ function parseSheetRows(lines) {
   }
   const prices = {};
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    if (!lines[i].trim()) continue;
+    const cols = csvSplitLine(lines[i], sep);
     const ticker = cols[fundosIdx]?.trim().toUpperCase();
     if (!ticker) continue;
-    const priceStr = cols[precoIdx]?.trim();
-    const price = priceStr ? parseSheetPrice(priceStr) : NaN;
-    const name = (nomeIdx >= 0 && cols[nomeIdx]?.trim()) ? cols[nomeIdx].trim() : ticker;
+    let price = NaN;
+    for (const pi of precoIndices) {
+      const priceStr = cols[pi]?.trim();
+      if (priceStr) {
+        price = parseSheetPrice(priceStr);
+        if (!isNaN(price) && price > 0) break;
+      }
+    }
+    let name = (nomeIdx >= 0 && cols[nomeIdx]?.trim()) ? cols[nomeIdx].trim() : ticker;
+    if (/^#N\/A|^#ERROR|^\#REF/i.test(name)) name = ticker;
     prices[ticker] = { ticker, price: (!isNaN(price) && price > 0) ? price : null, name, changePercent: null, time: null };
   }
   return prices;
