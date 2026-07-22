@@ -5,3 +5,8 @@ _check.js
 _migrar_prod.js
 npm-debug.log*
 .DS_Store
+
+# .NET
+api/dotnet/*/bin/
+api/dotnet/*/obj/
+api/dotnet/*/*.user
