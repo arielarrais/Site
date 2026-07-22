@@ -7,16 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
-    <PackageReference Include="ClosedXML" Version="0.102.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="11.0.0-preview.3.25271.1" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0-preview.3.26207.106" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0-preview.3.25271.1">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="11.0.0-preview.3.26207.106" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0-preview.3.25271.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="11.0.0-preview.6.26359.118" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="11.0.0-preview.6.26359.118" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SiteApi.Domain\SiteApi.Domain.csproj" />
+    <ProjectReference Include="..\SiteApi.Application\SiteApi.Application.csproj" />
+    <ProjectReference Include="..\SiteApi.Infrastructure\SiteApi.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -10,3 +10,4 @@ npm-debug.log*
 api/dotnet/*/bin/
 api/dotnet/*/obj/
 api/dotnet/*/*.user
+api/dotnet/.vs/

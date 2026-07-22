@@ -22,55 +22,90 @@ Site/
 │
 ├── api/
 │   ├── node/                        # Backend Node.js (original)
-│   │   ├── server.js                # Express server (1826 linhas)
+│   │   ├── server.js
 │   │   ├── package.json
-│   │   ├── package-lock.json
-│   │   ├── .env                     # Variáveis de ambiente
-│   │   ├── .env.example
-│   │   ├── fetch_dividendos.js      # Módulo de sync de dividendos
-│   │   ├── nginx.conf               # Config nginx (deploy)
-│   │   ├── render.yaml              # Config Render.com
-│   │   ├── _migrate.js              # Migração SQLite -> PostgreSQL
-│   │   ├── _migrar_prod.js          # Migração produção
-│   │   ├── _fix_pgto.js             # Correção datas pagamento
-│   │   ├── _check.js                # Diagnóstico
-│   │   ├── gerar_acoes.js           # Gerador tickers ações
-│   │   ├── gerar_fiis.js            # Gerador tickers FIIs
-│   │   ├── classificar_fiis.js      # Classificador FIIs
+│   │   ├── .env
+│   │   ├── fetch_dividendos.js
 │   │   └── Tickers/
-│   │       ├── acoes_b3.csv
-│   │       ├── acoes_b3.xlsx
-│   │       ├── fiis_b3.csv
-│   │       └── fiis_b3.xlsx
 │   │
-│   └── dotnet/SiteApi/              # Backend .NET 11 (novo)
-│       ├── SiteApi.csproj           # Projeto .NET 11
-│       ├── Program.cs               # Startup: JWT, PostgreSQL, CORS, static files
-│       ├── appsettings.json         # Configurações (DB, JWT, Brapi, Google)
-│       ├── appsettings.Development.json
+│   └── dotnet/                      # Backend .NET 11 (DDD Architecture)
+│       ├── SiteApi.sln              # Solution file
 │       │
-│       ├── Controllers/
-│       │   ├── AuthController.cs           # /api/register, /api/login, /api/auth/validate
-│       │   ├── PortfolioController.cs      # /api/portfolio (CRUD + XLSX parse)
-│       │   ├── AssetsController.cs         # /api/b3-assets, /api/assets/*
-│       │   ├── DividendsController.cs      # /api/dividends, /api/dividends/monthly
-│       │   ├── QuotesController.cs         # /api/quote, /api/quotes, /api/quotes/sheets
-│       │   ├── AdminController.cs          # /api/admin/*
-│       │   └── PagesController.cs          # /, /dashboard, /lancamentos, etc
+│       ├── SiteApi.Domain/          # Domain Layer (no dependencies)
+│       │   ├── Entities/
+│       │   │   ├── User.cs
+│       │   │   ├── PortfolioItem.cs     # + domain logic (IsSale, EffectiveQuantity)
+│       │   │   ├── B3Asset.cs           # + domain logic (IsFii)
+│       │   │   ├── AssetDividend.cs     # + domain logic (HasValidDates)
+│       │   │   └── AuditLog.cs
+│       │   ├── Enums/
+│       │   │   ├── MovementType.cs
+│       │   │   ├── AssetType.cs
+│       │   │   └── DividendType.cs
+│       │   ├── Interfaces/
+│       │   │   ├── Repositories/        # Repository contracts
+│       │   │   │   ├── IUserRepository.cs
+│       │   │   │   ├── IPortfolioRepository.cs
+│       │   │   │   ├── IAssetRepository.cs
+│       │   │   │   ├── IDividendRepository.cs
+│       │   │   │   └── IAuditLogRepository.cs
+│       │   │   └── Services/            # External service contracts
+│       │   │       ├── IQuoteService.cs
+│       │   │       ├── IDividendFetchingService.cs
+│       │   │       ├── IGoogleSheetsService.cs
+│       │   │       └── IXlsxParserService.cs
+│       │   ├── Services/
+│       │   │   └── PortfolioDomainService.cs  # Domain logic
+│       │   └── Exceptions/
+│       │       ├── DomainException.cs
+│       │       └── EntityNotFoundException.cs
 │       │
-│       ├── Models/
-│       │   ├── User.cs
-│       │   ├── PortfolioItem.cs
-│       │   ├── B3Asset.cs
-│       │   ├── AssetDividend.cs
-│       │   ├── AuditLog.cs
-│       │   └── Dtos.cs               # Request/Response DTOs
+│       ├── SiteApi.Application/     # Application Layer (use cases)
+│       │   ├── DTOs/
+│       │   │   ├── Auth/             # LoginRequest, RegisterRequest, LoginResponse
+│       │   │   ├── Portfolio/        # PortfolioItemDto, Create/Update requests
+│       │   │   ├── Assets/           # AssetDto, AssetTypeDto
+│       │   │   ├── Dividends/        # DividendDto, MonthlyDividendDto, requests
+│       │   │   └── Quotes/           # QuoteDto
+│       │   ├── Interfaces/
+│       │   │   ├── IAuthService.cs
+│       │   │   ├── IPortfolioService.cs
+│       │   │   ├── IAssetService.cs
+│       │   │   ├── IDividendService.cs
+│       │   │   ├── IQuoteAppService.cs
+│       │   │   └── IAdminService.cs
+│       │   └── Services/
+│       │       └── AuthService.cs    # Moved to Infrastructure
 │       │
-│       ├── Data/
-│       │   └── AppDbContext.cs        # Entity Framework Core context
+│       ├── SiteApi.Infrastructure/  # Infrastructure Layer (implementations)
+│       │   ├── Data/
+│       │   │   ├── AppDbContext.cs   # EF Core DbContext
+│       │   │   └── Repositories/     # Repository implementations
+│       │   │       ├── UserRepository.cs
+│       │   │       ├── PortfolioRepository.cs
+│       │   │       ├── AssetRepository.cs
+│       │   │       ├── DividendRepository.cs
+│       │   │       └── AuditLogRepository.cs
+│       │   ├── Services/             # External service implementations
+│       │   │   ├── AuthService.cs    # JWT + BCrypt
+│       │   │   ├── BrapiQuoteService.cs
+│       │   │   ├── YahooQuoteService.cs
+│       │   │   ├── GoogleSheetsService.cs
+│       │   │   └── XlsxParserService.cs
+│       │   └── DependencyInjection.cs  # DI extension method
 │       │
-│       └── Properties/
-│           └── launchSettings.json
+│       └── SiteApi/                 # Presentation Layer (API)
+│           ├── Program.cs           # Startup, auth, CORS, static files
+│           ├── appsettings.json
+│           ├── SiteApi.csproj       # References Domain, Application, Infrastructure
+│           └── Controllers/
+│               ├── AuthController.cs
+│               ├── PortfolioController.cs
+│               ├── AssetsController.cs
+│               ├── DividendsController.cs
+│               ├── QuotesController.cs
+│               ├── AdminController.cs
+│               └── PagesController.cs
 │
 ├── node_modules/                    # (gitignored)
 └── .git/

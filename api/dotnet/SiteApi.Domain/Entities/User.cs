@@ -1,4 +1,4 @@
-namespace SiteApi.Models;
+namespace SiteApi.Domain.Entities;
 
 public class User
 {

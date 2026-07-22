@@ -1,25 +1,20 @@
 using System.Text;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
-using SiteApi.Data;
+using SiteApi.Infrastructure;
+using SiteApi.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>
     {
-        opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        opts.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         opts.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddHttpClient();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 var jwtSecret = builder.Configuration["JwtSecret"] ?? "fallback_secret_change_me";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -31,8 +26,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = false,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = null,
-            ValidAudience = null,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
         options.Events = new JwtBearerEvents
@@ -42,12 +35,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var claims = context.Principal?.Claims?.ToList();
                 if (claims != null)
                 {
-                    var userId = claims.FirstOrDefault(c => c.Type == "id")?.Value;
-                    var username = claims.FirstOrDefault(c => c.Type == "username")?.Value;
-                    var fullName = claims.FirstOrDefault(c => c.Type == "fullName")?.Value;
-                    context.HttpContext.Items["UserId"] = userId;
-                    context.HttpContext.Items["Username"] = username;
-                    context.HttpContext.Items["FullName"] = fullName;
+                    context.HttpContext.Items["UserId"] = claims.FirstOrDefault(c => c.Type == "id")?.Value;
+                    context.HttpContext.Items["Username"] = claims.FirstOrDefault(c => c.Type == "username")?.Value;
+                    context.HttpContext.Items["FullName"] = claims.FirstOrDefault(c => c.Type == "fullName")?.Value;
                 }
                 return Task.CompletedTask;
             }
@@ -65,7 +55,6 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
