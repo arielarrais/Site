@@ -512,7 +512,7 @@ if (isDashboard) {
       if (addForm && !addForm.classList.contains('hidden')) {
         const priceInput = addForm.querySelector('.al-price');
         if (priceInput && (Number(priceInput.value) === 0 || priceInput.value === '')) {
-          priceInput.value = currentPrice.toFixed(2);
+          priceInput.value = (currentPrice || 0).toFixed(2);
         }
       }
 
@@ -913,7 +913,7 @@ if (isDashboard) {
                   <div class="form-title">Editar lançamento</div>
                   <label>Tipo <select class="el-type"><option value="compra" ${item.movementType === 'venda' ? '' : 'selected'}>Compra</option><option value="venda" ${item.movementType === 'venda' ? 'selected' : ''}>Venda</option></select></label>
                   <label>Quantidade <input class="el-quantity" type="number" min="1" step="1" value="${item.quantity}" /></label>
-                  <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${(item.purchasePrice ?? itemCurrentPrice).toFixed(2)}" /></label>
+                  <label>Preço pago <input class="el-price" type="number" min="0.01" step="0.01" value="${((item.purchasePrice ?? itemCurrentPrice) || 0).toFixed(2)}" /></label>
                   <label>Data <input class="el-date date-br" type="date" value="${itemDate || getTodayInputValue()}" /></label>
                   <label>Instituição <input class="el-institution" type="text" placeholder="Opcional" value="${item.institution || ''}" /></label>
                   <button class="btn btn-primary el-save" type="button" data-id="${item.id}" style="width:auto">Salvar</button>
@@ -927,7 +927,7 @@ if (isDashboard) {
               <div class="form-title">Novo lançamento</div>
               <label>Tipo <select class="al-type"><option value="compra">Compra</option><option value="venda">Venda</option></select></label>
               <label>Quantidade <input class="al-quantity" type="number" min="1" step="1" value="1" /></label>
-              <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${currentPrice.toFixed(2)}" /></label>
+              <label>Preço pago <input class="al-price" type="number" min="0.01" step="0.01" value="${(currentPrice || 0).toFixed(2)}" /></label>
               <label>Data <input class="al-date date-br" type="date" value="${getTodayInputValue()}" /></label>
               <label>Instituição <input class="al-institution" type="text" placeholder="Opcional" /></label>
               <button class="btn btn-primary al-save" type="button" data-ticker="${group.ticker}" style="width:auto">Salvar</button>

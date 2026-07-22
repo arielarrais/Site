@@ -1481,6 +1481,9 @@ function parseSheetRows(lines) {
   const precoIdx = headers.findIndex(h =>
     h.toUpperCase().includes('PREÇO') || h.toUpperCase().includes('PRECO') || h.toUpperCase().includes('ATUAL')
   );
+  const nomeIdx = headers.findIndex(h =>
+    h.toUpperCase() === 'NOME' || h.toUpperCase().includes('NOME') || h.toUpperCase().includes('NAME')
+  );
   if (fundosIdx < 0 || precoIdx < 0) {
     throw new Error('Colunas FUNDOS e PREÇO ATUAL não encontradas na planilha.');
   }
@@ -1490,11 +1493,9 @@ function parseSheetRows(lines) {
     const ticker = cols[fundosIdx]?.trim().toUpperCase();
     if (!ticker) continue;
     const priceStr = cols[precoIdx]?.trim();
-    if (!priceStr) continue;
-    const price = parseSheetPrice(priceStr);
-    if (!isNaN(price) && price > 0) {
-      prices[ticker] = { ticker, price, name: ticker, changePercent: null, time: null };
-    }
+    const price = priceStr ? parseSheetPrice(priceStr) : NaN;
+    const name = (nomeIdx >= 0 && cols[nomeIdx]?.trim()) ? cols[nomeIdx].trim() : ticker;
+    prices[ticker] = { ticker, price: (!isNaN(price) && price > 0) ? price : null, name, changePercent: null, time: null };
   }
   return prices;
 }
@@ -1657,6 +1658,67 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+// ===================== SYNC TICKERS FROM SHEET =====================
+app.post('/api/admin/sync-tickers-sheet', async (req, res) => {
+  try {
+    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Kzhcn6A8Kmd6SqEDM87gHbyb6HoDGzxXr5vsi1pIu44/export?format=csv';
+    const apiKey = process.env.GOOGLE_API_KEY || '';
+
+    let prices = {};
+
+    if (apiKey) {
+      const sheetId = extractSheetId(SHEET_URL);
+      if (sheetId) {
+        try {
+          const values = await fetchSheetViaApi(sheetId, apiKey);
+          prices = parseSheetRows(values.map(r => r.join('\t')));
+        } catch (e) {
+          console.warn('Google API falhou, tentando CSV:', e.message);
+        }
+      }
+    }
+
+    if (!Object.keys(prices).length) {
+      const lines = await fetchSheetCSV(SHEET_URL);
+      prices = parseSheetRows(lines);
+    }
+
+    const tickers = Object.keys(prices);
+    if (!tickers.length) return res.status(400).json({ error: 'Nenhum ticker encontrado na planilha.' });
+
+    let inserted = 0, updated = 0;
+    const logLines = [];
+
+    for (const ticker of tickers) {
+      const info = prices[ticker];
+      const priceVal = info.price != null ? String(info.price) : null;
+      const existing = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [ticker]);
+      if (existing.rows.length > 0) {
+        await pool.query(
+          'UPDATE b3_assets SET regularmarketprice = $1, name = $2 WHERE ticker = $3',
+          [priceVal, info.name, ticker]
+        );
+        updated++;
+        logLines.push(`  ${ticker} -> atualizado (preco: ${info.price})`);
+      } else {
+        const assettype = ticker.endsWith('11') ? 'fii' : 'acao';
+        await pool.query(
+          'INSERT INTO b3_assets (ticker, name, assettype, regularmarketprice) VALUES ($1, $2, $3, $4)',
+          [ticker, info.name, assettype, priceVal]
+        );
+        inserted++;
+        logLines.push(`  ${ticker} -> inserido (${assettype}, preco: ${info.price})`);
+      }
+    }
+
+    console.log(`Sync tickers sheet: ${inserted} inseridos, ${updated} atualizados de ${tickers.length}`);
+    res.json({ inserted, updated, total: tickers.length, log: logLines.join('\n') });
+  } catch (err) {
+    console.error('Erro ao sincronizar tickers da planilha:', err);
+    res.status(500).json({ error: 'Erro ao sincronizar tickers: ' + err.message });
+  }
+});
+
 app.use((req, res) => {
   res.redirect('/');
 });
@@ -1710,66 +1772,6 @@ async function seedAssetsDatabase() {
   }
   console.log(`${count} ativos inseridos no banco.`);
 }
-
-// ===================== SYNC TICKERS FROM SHEET =====================
-app.post('/api/admin/sync-tickers-sheet', async (req, res) => {
-  try {
-    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Kzhcn6A8Kmd6SqEDM87gHbyb6HoDGzxXr5vsi1pIu44/export?format=csv';
-    const apiKey = process.env.GOOGLE_API_KEY || '';
-
-    let prices = {};
-
-    if (apiKey) {
-      const sheetId = extractSheetId(SHEET_URL);
-      if (sheetId) {
-        try {
-          const values = await fetchSheetViaApi(sheetId, apiKey);
-          prices = parseSheetRows(values.map(r => r.join('\t')));
-        } catch (e) {
-          console.warn('Google API falhou, tentando CSV:', e.message);
-        }
-      }
-    }
-
-    if (!Object.keys(prices).length) {
-      const lines = await fetchSheetCSV(SHEET_URL);
-      prices = parseSheetRows(lines);
-    }
-
-    const tickers = Object.keys(prices);
-    if (!tickers.length) return res.status(400).json({ error: 'Nenhum ticker encontrado na planilha.' });
-
-    let inserted = 0, updated = 0;
-    const logLines = [];
-
-    for (const ticker of tickers) {
-      const info = prices[ticker];
-      const existing = await pool.query('SELECT id FROM b3_assets WHERE ticker = $1', [ticker]);
-      if (existing.rows.length > 0) {
-        await pool.query(
-          'UPDATE b3_assets SET regularmarketprice = $1 WHERE ticker = $2',
-          [String(info.price), ticker]
-        );
-        updated++;
-        logLines.push(`  ${ticker} -> atualizado (preco: ${info.price})`);
-      } else {
-        const assettype = ticker.endsWith('11') ? 'fii' : 'acao';
-        await pool.query(
-          'INSERT INTO b3_assets (ticker, name, assettype, regularmarketprice) VALUES ($1, $2, $3, $4)',
-          [ticker, ticker, assettype, String(info.price)]
-        );
-        inserted++;
-        logLines.push(`  ${ticker} -> inserido (${assettype}, preco: ${info.price})`);
-      }
-    }
-
-    console.log(`Sync tickers sheet: ${inserted} inseridos, ${updated} atualizados de ${tickers.length}`);
-    res.json({ inserted, updated, total: tickers.length, log: logLines.join('\n') });
-  } catch (err) {
-    console.error('Erro ao sincronizar tickers da planilha:', err);
-    res.status(500).json({ error: 'Erro ao sincronizar tickers: ' + err.message });
-  }
-});
 
 app.listen(port, '0.0.0.0', async () => {
   try {

@@ -244,9 +244,7 @@ function onTableClick(e) {
       .then(r => {
         alert(`${r.inserted} novos, ${r.updated} atualizados, ${r.skipped} ignorados (fonte: ${r.source}).`);
         fetchDivBtn.textContent = '🌐';
-loadAssets();
-
-})();
+        loadAssets();
       })
       .catch(err => { alert('Erro: ' + err.message); fetchDivBtn.textContent = '🌐'; });
     return;
@@ -435,3 +433,4 @@ document.querySelectorAll('.toggle-section-btn').forEach(btn => {
 });
 
 loadAssets();
+})();
