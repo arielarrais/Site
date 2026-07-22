@@ -389,7 +389,7 @@ if (isDashboard) {
     } else {
       quote = await req(`/api/quote?ticker=${encodeURIComponent(ticker)}`);
     }
-    latestPrices.set(ticker, quote.price);
+    latestPrices.set(ticker, quote.price || 0);
     if (assetByTicker.has(ticker)) {
       const asset = assetByTicker.get(ticker);
       asset.price = quote.price;
@@ -401,7 +401,10 @@ if (isDashboard) {
   }
 
   function getAssetCurrentPrice(ticker) {
-    if (latestPrices.has(ticker)) return latestPrices.get(ticker);
+    if (latestPrices.has(ticker)) {
+      const p = latestPrices.get(ticker);
+      if (p != null) return p;
+    }
     const asset = assetByTicker.get(ticker);
     return asset && asset.price ? asset.price : 0;
   }
