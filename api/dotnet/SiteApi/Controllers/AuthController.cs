@@ -43,7 +43,7 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    [HttpPost("register")]
+    [HttpPost("~/api/register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
@@ -69,7 +69,7 @@ public class AuthController : ControllerBase
         return Ok(new { id = user.Id, username = user.Username, fullName = user.Fullname, email = user.Email });
     }
 
-    [HttpPost("login")]
+    [HttpPost("~/api/login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
     }
 
     [Authorize]
-    [HttpGet("validate")]
+    [HttpGet("~/api/auth/validate")]
     public IActionResult Validate()
     {
         var userId = HttpContext.Items["UserId"]?.ToString();

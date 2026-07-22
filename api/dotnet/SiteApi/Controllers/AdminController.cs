@@ -324,7 +324,7 @@ public class AdminController : ControllerBase
         try
         {
             var sheetUrl = "https://docs.google.com/spreadsheets/d/1Kzhcn6A8Kmd6SqEDM87gHbyb6HoDGzxXr5vsi1pIu44/export?format=csv";
-            var apiKey = _config["GoogleApiToken"] ?? "";
+            var apiKey = _config["GoogleApiKey"] ?? "";
             Dictionary<string, JsonElement> prices = new();
 
             if (!string.IsNullOrEmpty(apiKey))

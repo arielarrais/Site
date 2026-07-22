@@ -255,7 +255,7 @@ public class QuotesController : ControllerBase
 
         try
         {
-            var apiKey = key ?? _config["GoogleApiToken"] ?? "";
+            var apiKey = key ?? _config["GoogleApiKey"] ?? "";
             Dictionary<string, object> prices = new();
 
             if (!string.IsNullOrEmpty(apiKey))
