@@ -68,7 +68,8 @@ async function validateToken() {
 }
 
 function formatCurrency(value) {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (value == null) return '—';
+  return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function getPriceSource() {
@@ -738,7 +739,7 @@ if (isDashboard) {
         </label>
         <label>
           Preço pago
-          <input id="asset-purchase-price" type="number" min="0.01" step="0.01" value="${price.toFixed(2)}" />
+          <input id="asset-purchase-price" type="number" min="0.01" step="0.01" value="${(price || 0).toFixed(2)}" />
         </label>
         <label>
           Data da compra
