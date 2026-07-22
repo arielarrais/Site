@@ -483,12 +483,12 @@ app.get('/api/b3-assets', async (req, res) => {
     let result;
     if (query) {
       result = await pool.query(
-        'SELECT id, ticker, name, assettype FROM b3_assets WHERE ticker LIKE $1 OR name LIKE $1 ORDER BY ticker LIMIT 30',
+        'SELECT id, ticker, name, assettype, regularmarketprice FROM b3_assets WHERE ticker LIKE $1 OR name LIKE $1 ORDER BY ticker LIMIT 30',
         [`%${query}%`]
       );
     } else {
       result = await pool.query(
-        'SELECT id, ticker, name, assettype FROM b3_assets ORDER BY assettype, ticker'
+        'SELECT id, ticker, name, assettype, regularmarketprice FROM b3_assets ORDER BY assettype, ticker'
       );
     }
     res.json(result.rows);

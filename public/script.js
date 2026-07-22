@@ -369,7 +369,8 @@ if (isDashboard) {
       const results = await req(`/api/b3-assets?q=${encodeURIComponent(formatted)}`);
       if (results.length) {
         const found = results[0];
-        assetByTicker.set(found.ticker, { ticker: found.ticker, name: found.name, price: 0 });
+        const price = found.regularmarketprice ? Number(found.regularmarketprice) : 0;
+        assetByTicker.set(found.ticker, { ticker: found.ticker, name: found.name, price });
         return { ticker: found.ticker, name: found.name };
       }
     } catch (e) { console.warn(e.message); }
@@ -400,7 +401,9 @@ if (isDashboard) {
   }
 
   function getAssetCurrentPrice(ticker) {
-    return latestPrices.has(ticker) ? latestPrices.get(ticker) : 0;
+    if (latestPrices.has(ticker)) return latestPrices.get(ticker);
+    const asset = assetByTicker.get(ticker);
+    return asset && asset.price ? asset.price : 0;
   }
 
   async function fetchQuotes(tickers) {
