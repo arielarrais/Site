@@ -42,6 +42,10 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(new { error = ex.Message });
         }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [Authorize]

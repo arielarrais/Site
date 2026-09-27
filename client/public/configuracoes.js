@@ -43,7 +43,7 @@ async function req(url, method, body) {
 const currentUser = await validateToken();
 if (!currentUser) return;
 
-const isAdmin = currentUser.username === 'admin';
+const isAdmin = currentUser.username === 'admin' || currentUser.username === 'admin@admin';
 if (isAdmin) {
   document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
 }
@@ -307,6 +307,11 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', asy
   const startLabel = document.getElementById('fetch-all-dividends-start');
   const finishLabel = document.getElementById('fetch-all-dividends-finish');
   const log = document.getElementById('fetch-all-dividends-log');
+  let pollTimer = null;
+
+  const stopPolling = () => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  };
 
   btn.disabled = true;
   btn.textContent = 'Sincronizando...';
@@ -318,26 +323,82 @@ document.getElementById('fetch-all-dividends-btn').addEventListener('click', asy
   finishLabel.style.display = 'none';
   log.style.display = 'block';
   log.textContent = '';
+  log.scrollTop = log.scrollHeight;
 
   try {
-    const data = await req('/api/admin/fetch-all-dividends', 'POST');
-    startLabel.className = 'process-status finish';
-    startLabel.textContent = `Processando ${data.total} ativos em segundo plano. Verifique o console do servidor quando finalizar.`;
-    finishLabel.style.display = 'block';
-    finishLabel.className = 'process-status';
-    finishLabel.textContent = data.message;
-    log.textContent += `${data.total} ativos sendo sincronizados...\n`;
+    await req('/api/admin/fetch-all-dividends', 'POST');
+
+    startLabel.className = 'process-status start';
+    startLabel.textContent = 'Processando ativos em segundo plano...';
+
+    pollTimer = setInterval(async () => {
+      try {
+        const st = await req('/api/admin/fetch-all-dividends-status');
+        log.textContent = `Processados: ${st.processed}/${st.total}\n`;
+        log.textContent += `Inseridos: ${st.inserted} | Atualizados: ${st.updated} | Ignorados: ${st.skipped} | Erros: ${st.errors}\n`;
+        if (st.lastTicker) log.textContent += `Último: ${st.lastTicker}\n`;
+        log.scrollTop = log.scrollHeight;
+
+        if (st.finished) {
+          stopPolling();
+          startLabel.className = 'process-status finish';
+          startLabel.textContent = 'Sincronização concluída.';
+          finishLabel.style.display = 'block';
+          finishLabel.className = 'process-status finish';
+          finishLabel.textContent = `${st.processed} ativos processados: ${st.inserted} dividendos inseridos, ${st.updated} atualizados, ${st.skipped} ignorados, ${st.errors} erros.`;
+          btn.disabled = false;
+          btn.textContent = 'Atualizar todos os dividendos';
+        }
+      } catch {
+        stopPolling();
+        startLabel.className = 'process-status error';
+        startLabel.textContent = 'Erro ao consultar status';
+        btn.disabled = false;
+        btn.textContent = 'Atualizar todos os dividendos';
+      }
+    }, 3000);
   } catch (err) {
     startLabel.className = 'process-status error';
     startLabel.textContent = 'Erro ao iniciar';
     finishLabel.style.display = 'block';
     finishLabel.className = 'process-status error';
     finishLabel.textContent = err.message || 'Falha na conexão com o servidor';
+    btn.disabled = false;
+    btn.textContent = 'Atualizar todos os dividendos';
   }
-
-  btn.disabled = false;
-  btn.textContent = 'Atualizar todos os dividendos';
 });
+
+// === Import Tickers ===
+const importBtn = document.getElementById('import-tickers-btn');
+if (importBtn) {
+  importBtn.addEventListener('click', async () => {
+    const status = document.getElementById('import-tickers-status');
+    const log = document.getElementById('import-tickers-log');
+
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importando...';
+    status.className = 'process-status start';
+    status.style.display = 'block';
+    status.textContent = 'Buscando tickers na Brapi...';
+    log.style.display = 'block';
+    log.textContent = '';
+
+    try {
+      const data = await req('/api/admin/import-tickers', 'POST');
+      status.className = 'process-status finish';
+      status.textContent = data.message;
+      log.textContent += `Total: ${data.total} (${data.acoes} acoes, ${data.fiis} fiis)\n`;
+      log.textContent += `Inseridos: ${data.inserted} | Atualizados: ${data.updated}\n`;
+    } catch (err) {
+      status.className = 'process-status error';
+      status.textContent = 'Erro: ' + (err.message || 'Falha na conexão com o servidor');
+      log.textContent += 'Ocorreu um erro durante a importação.\n';
+    }
+
+    importBtn.disabled = false;
+    importBtn.textContent = 'Inserir ativos';
+  });
+}
 
 // === Fix Payment Dates ===
 const fixBtn = document.getElementById('fix-pgto-btn');

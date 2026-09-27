@@ -44,7 +44,7 @@ async function req(url, method = 'GET', body = null) {
 let currentUser = await validateToken();
 if (!currentUser) return;
 
-const isAdmin = currentUser && currentUser.username === 'admin';
+const isAdmin = currentUser && (currentUser.username === 'admin' || currentUser.username === 'admin@admin');
 if (!isAdmin) {
   window.location.href = '/dashboard';
 }
@@ -96,7 +96,7 @@ async function loadUsers() {
       return;
     }
     tbody.innerHTML = users.map(u => {
-      const isAdminUser = u.username === 'admin';
+      const isAdminUser = u.username === 'admin' || u.username === 'admin@admin';
       return `
         <tr>
           <td><strong>${u.id}</strong></td>

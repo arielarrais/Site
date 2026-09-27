@@ -10,5 +10,7 @@ public interface IDividendRepository
     Task<AssetDividend?> GetByAssetAndComDateAsync(int assetId, string comDate);
     Task<AssetDividend> AddAsync(AssetDividend dividend);
     Task UpdateAsync(AssetDividend dividend);
+    Task AddRangeAsync(IEnumerable<AssetDividend> dividends);
+    Task UpdateRangeAsync(IEnumerable<AssetDividend> dividends);
     Task<List<AssetDividend>> GetAllAsync();
 }

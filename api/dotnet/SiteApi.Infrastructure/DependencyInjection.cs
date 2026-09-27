@@ -30,11 +30,19 @@ public static class DependencyInjection
 
         // Infrastructure Services
         services.AddScoped<IQuoteService, BrapiQuoteService>();
+        services.AddScoped<BrapiQuoteService>();
+        services.AddScoped<YahooQuoteService>();
         services.AddScoped<IGoogleSheetsService, GoogleSheetsService>();
         services.AddScoped<IXlsxParserService, XlsxParserService>();
+        services.AddScoped<IDividendFetchingService, DividendFetchingService>();
 
         // Application Services
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IPortfolioService, PortfolioService>();
+        services.AddScoped<IAssetService, AssetService>();
+        services.AddScoped<IDividendService, DividendService>();
+        services.AddScoped<IQuoteAppService, QuoteAppService>();
+        services.AddScoped<IAdminService, AdminService>();
 
         return services;
     }

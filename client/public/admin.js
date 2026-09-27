@@ -104,7 +104,7 @@ if (sidebar && mobileMenuBtn) {
 
 let selectedAssetId = null;
 
-const isAdmin = currentUser && currentUser.username === 'admin';
+const isAdmin = currentUser && (currentUser.username === 'admin' || currentUser.username === 'admin@admin');
 
 const sortState = { acoes: { key: null, dir: 'asc' }, fiis: { key: null, dir: 'asc' } };
 let allAssets = [];

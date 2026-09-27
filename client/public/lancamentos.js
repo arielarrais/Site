@@ -40,7 +40,7 @@
 
   document.getElementById('display-user').textContent = currentUser.fullName || currentUser.username;
 
-  const isAdmin = currentUser.username === 'admin';
+  const isAdmin = currentUser.username === 'admin' || currentUser.username === 'admin@admin';
   if (isAdmin) {
     document.querySelectorAll('.admin-only').forEach(function (el) { el.classList.remove('hidden'); });
   }

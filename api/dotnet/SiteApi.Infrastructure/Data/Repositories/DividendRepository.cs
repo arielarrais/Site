@@ -48,6 +48,18 @@ public class DividendRepository : IDividendRepository
         await _db.SaveChangesAsync();
     }
 
+    public async Task AddRangeAsync(IEnumerable<AssetDividend> dividends)
+    {
+        _db.AssetDividends.AddRange(dividends);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task UpdateRangeAsync(IEnumerable<AssetDividend> dividends)
+    {
+        _db.AssetDividends.UpdateRange(dividends);
+        await _db.SaveChangesAsync();
+    }
+
     public async Task<List<AssetDividend>> GetAllAsync() =>
         await _db.AssetDividends.OrderByDescending(d => d.PaymentDate).ToListAsync();
 }

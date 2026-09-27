@@ -181,6 +181,21 @@
         </div>
       </div>
     </div>
+
+    <div class="card dashboard-card" style="margin-top:20px">
+      <div class="dashboard-header">
+        <h1>Inserir ativos</h1>
+      </div>
+      <div class="dashboard-content">
+        <div class="info-box">
+          <h3>Importar tickers de ações e FIIs</h3>
+          <p class="small-note" style="margin-bottom:12px">Busca na Brapi todos os tickers de ações, units, FIIs, FI-Infra e FI-Agro e insere/atualiza no banco de dados. Tickers já cadastrados são atualizados.</p>
+          <button id="import-tickers-btn" class="btn btn-primary" style="width:auto">Inserir ativos</button>
+          <div id="import-tickers-status" class="process-status" style="display:none"></div>
+          <div id="import-tickers-log" style="margin-top:8px;max-height:300px;overflow:auto;font-size:12px;background:#f5f5f5;padding:8px;border-radius:4px;display:none;white-space:pre-wrap;font-family:monospace"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="configuracoes.js"></script>

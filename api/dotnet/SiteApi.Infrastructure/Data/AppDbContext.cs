@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiteApi.Domain.Entities;
+using SiteApi.Domain.Enums;
 
 namespace SiteApi.Infrastructure.Data;
 
@@ -37,7 +38,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.PurchasePrice).HasColumnName("purchaseprice");
             e.Property(x => x.PurchaseDate).HasColumnName("purchasedat");
             e.Property(x => x.Institution).HasColumnName("institution").HasDefaultValue("");
-            e.Property(x => x.MovementType).HasColumnName("movement_type").HasDefaultValue("compra");
+            e.Property(x => x.MovementType).HasColumnName("movement_type").HasDefaultValue(MovementType.compra);
         });
 
         modelBuilder.Entity<B3Asset>(e =>
