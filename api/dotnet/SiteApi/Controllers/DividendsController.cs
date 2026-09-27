@@ -46,6 +46,21 @@ public class DividendsController : ControllerBase
         }
     }
 
+    [HttpGet("calendar")]
+    public async Task<IActionResult> GetDividendCalendar([FromQuery] int userId, [FromQuery] int? year)
+    {
+        if (userId <= 0) return BadRequest(new { error = "userId é obrigatório." });
+        var target = year is >= 1990 and <= 2100 ? year.Value : DateTime.Now.Year;
+        try
+        {
+            return Ok(await _dividendService.GetCalendarAsync(userId, target));
+        }
+        catch
+        {
+            return StatusCode(500, new { error = "Erro ao buscar o calendário de dividendos." });
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateDividend([FromBody] CreateDividendRequest req)
     {

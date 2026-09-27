@@ -1588,3 +1588,146 @@ body.with-sidebar.sidebar-collapsed {
     padding: 80px 20px 20px 240px;
   }
 }
+
+.cal-box {
+  margin-bottom: 16px;
+}
+
+.cal-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cal-select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #fff;
+  color: #1a1a2e;
+}
+
+.cal-modo {
+  display: flex;
+  border: 1px solid #d0d5f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cal-modo-btn {
+  padding: 6px 12px;
+  border: none;
+  background: #fff;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cal-modo-btn + .cal-modo-btn {
+  border-left: 1px solid #d0d5f0;
+}
+
+.cal-modo-btn:hover {
+  background: #e4e7ff;
+}
+
+.cal-modo-btn.active {
+  background: #1a73e8;
+  color: #fff;
+}
+
+.cal-wrap {
+  max-height: 340px;
+  margin-top: 0;
+}
+
+.cal-table {
+  font-size: 12px;
+  min-width: 880px;
+}
+
+.cal-table th,
+.cal-table td {
+  padding: 6px 5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cal-table th.cal-ticker-col,
+.cal-table td.cal-ticker-col {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  border-right: 2px solid #e8e8ff;
+}
+
+.cal-table thead th.cal-ticker-col {
+  background: #f0f2ff;
+  z-index: 3;
+}
+
+.cal-table tbody tr:hover td.cal-ticker-col {
+  background: #f0f2ff;
+}
+
+.cal-ticker-name {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
+  text-transform: none;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #1a73e8;
+  background: #e8f0fe;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.cal-cell {
+  color: #1e7e34;
+  font-weight: 600;
+}
+
+.cal-cell.zero {
+  color: #ccc;
+  font-weight: 400;
+}
+
+.cal-cell .cal-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
+}
+
+.cal-foot-row td,
+.cal-table tfoot td {
+  font-weight: 700;
+  background: #f0faf0;
+  border-top: 2px solid #d0d5f0;
+  text-align: right;
+}
+
+.cal-table tfoot td.cal-ticker-col {
+  background: #f0faf0;
+  text-align: left;
+}
+
+.cal-total-year {
+  color: #1e7e34;
+}

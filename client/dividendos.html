@@ -90,6 +90,26 @@
   <div class="container dashboard-active" id="main-container">
     <div class="card dashboard-card">
       <div class="dashboard-content">
+        <div class="info-box cal-box">
+          <div class="portfolio-header">
+            <h2>Dividendos por Mês</h2>
+            <div class="cal-controls">
+              <select id="cal-ano" class="cal-select" title="Ano"></select>
+              <div class="cal-modo" id="cal-modo">
+                <button type="button" class="cal-modo-btn active" data-modo="cota">Por cota</button>
+                <button type="button" class="cal-modo-btn" data-modo="total">Total recebido</button>
+              </div>
+            </div>
+          </div>
+          <p class="small-note" id="cal-legenda" style="margin-bottom:8px"></p>
+          <div class="admin-table-wrap cal-wrap">
+            <table class="admin-table cal-table">
+              <thead><tr id="cal-head"></tr></thead>
+              <tbody id="cal-body"></tbody>
+              <tfoot id="cal-foot"></tfoot>
+            </table>
+          </div>
+        </div>
         <div class="portfolio-panel">
           <div class="info-box">
             <div class="portfolio-header">
