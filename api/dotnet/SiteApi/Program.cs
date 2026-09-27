@@ -81,9 +81,9 @@ var clientProvider = new PhysicalFileProvider(clientPath);
 var publicPath = Path.Combine(clientPath, "public");
 var publicProvider = new PhysicalFileProvider(publicPath);
 
-// sempre revalidar: evita que o navegador continue usando JS/CSS de um deploy antigo
+// no-store: o navegador nunca pode reaproveitar JS/CSS de um deploy anterior
 void NoCache(StaticFileResponseContext ctx) =>
-    ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
+    ctx.Context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
 
 app.UseStaticFiles(new StaticFileOptions { FileProvider = clientProvider, OnPrepareResponse = NoCache });
 app.UseStaticFiles(new StaticFileOptions { FileProvider = publicProvider, OnPrepareResponse = NoCache });
