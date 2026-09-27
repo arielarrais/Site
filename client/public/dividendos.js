@@ -14,8 +14,8 @@
     localStorage.removeItem('site-login-authenticated');
   }
   async function validateToken() {
-    const user = getUser();
-    if (!user) return null;
+      const user = getUser();
+      if (!user) { window.location.href = '/'; return null; }
     try {
       const res = await fetch('/api/auth/validate', { headers: { 'Authorization': 'Bearer ' + user.token } });
       if (!res.ok) { clearUser(); window.location.href = '/'; return null; }
