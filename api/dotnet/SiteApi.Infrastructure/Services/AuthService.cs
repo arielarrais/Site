@@ -21,7 +21,8 @@ public class AuthService : IAuthService
         _config = config;
     }
 
-    private string JwtSecret => _config["JwtSecret"] ?? "fallback_secret_change_me";
+    private string JwtSecret => _config["JwtSecret"]
+        ?? throw new InvalidOperationException("JwtSecret nao configurada. Defina JWT_SECRET no ambiente ou no .env.");
 
     private string GenerateToken(User user)
     {

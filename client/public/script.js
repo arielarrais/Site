@@ -77,14 +77,9 @@ function getPriceSource() {
 }
 
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Kzhcn6A8Kmd6SqEDM87gHbyb6HoDGzxXr5vsi1pIu44/export?format=csv';
-const GOOGLE_API_KEY = 'AIzaSyCg4g-6e6HKGDfeOFABp8ClQbYzAkVaReY';
 
 function getSheetUrl() {
   return SHEET_URL;
-}
-
-function getGoogleApiKey() {
-  return GOOGLE_API_KEY;
 }
 
 let sheetPricesCache = null;
@@ -95,9 +90,8 @@ async function refreshSheetPrices() {
   if (!url) throw new Error('URL da planilha não configurada.');
   const now = Date.now();
   if (sheetPricesCache && (now - sheetPricesTimestamp) < 60000) return;
-  const apiKey = getGoogleApiKey();
-  const params = `url=${encodeURIComponent(url)}${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`;
-  const prices = await req(`/api/quotes/sheets?${params}`);
+  // a chave da API do Google fica no servidor (variavel de ambiente), nao no navegador
+  const prices = await req(`/api/quotes/sheets?url=${encodeURIComponent(url)}`);
   sheetPricesCache = prices;
   sheetPricesTimestamp = now;
 }
@@ -167,7 +161,7 @@ if (isDashboard) {
     let currentUser = await validateToken();
     if (!currentUser) return;
 
-    const isAdmin = currentUser.username === 'admin';
+    const isAdmin = currentUser.username === 'admin' || currentUser.username === 'admin@admin';
   if (isAdmin) {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
   }
