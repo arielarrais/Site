@@ -242,7 +242,12 @@ function onTableClick(e) {
     fetchDivBtn.textContent = '...';
     req('/api/admin/fetch-dividends', 'POST', { ticker })
       .then(r => {
-        alert(`${r.inserted} novos, ${r.updated} atualizados, ${r.skipped} ignorados (fonte: ${r.source}).`);
+        const d = r.result || {};
+        const partes = [];
+        if (d.inserted) partes.push(`${d.inserted} novos`);
+        if (d.updated) partes.push(`${d.updated} atualizados`);
+        if (d.skipped) partes.push(`${d.skipped} já constavam`);
+        alert(`${ticker} (${d.source || 'sem fonte'}): ${partes.length ? partes.join(', ') : 'nenhuma alteração'}.`);
         fetchDivBtn.textContent = '🌐';
         loadAssets();
       })
