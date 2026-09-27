@@ -124,10 +124,12 @@ public class DividendFetchingService : IDividendFetchingService
             var html = await response.Content.ReadAsStringAsync();
             var tables = Regex.Matches(html, "<table[\\s\\S]*?<\\/table>", RegexOptions.IgnoreCase);
 
+            // A pagina tem varias tabelas: a primeira e apenas o "ultimo rendimento" (1 linha),
+            // o historico vem depois. Percorrer todas e exigir data na segunda coluna evita
+            // pegar a tabela de comunicados e garante o historico completo.
             foreach (Match table in tables)
             {
                 var rows = Regex.Matches(table.Value, "<tr[^>]*>[\\s\\S]*?<\\/tr>", RegexOptions.IgnoreCase);
-                var found = false;
 
                 foreach (Match row in rows)
                 {
@@ -136,16 +138,12 @@ public class DividendFetchingService : IDividendFetchingService
                     var cells = tds.Select(t => Regex.Replace(t.Groups[1].Value, "<[^>]+>", "").Trim()).ToList();
 
                     var comDate = ParseBrDate(cells[0]);
-                    if (comDate == null) continue;
                     var payDate = ParseBrDate(cells[1]);
                     var value = ParseBRL(cells[2]);
-                    if (value == null || value <= 0) continue;
+                    if (comDate == null || payDate == null || value == null || value <= 0) continue;
 
-                    found = true;
                     DividendsAddNew(dividends, new FetchedDividend(comDate, payDate, value.Value, "rendimento"));
                 }
-
-                if (found) return dividends;
             }
         }
         catch { }
