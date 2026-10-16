@@ -167,7 +167,8 @@
       var row = calData.rows[i];
       var label = '<strong>' + row.ticker + '</strong>';
       if (row.isFii) label += '<span class="cal-tag">FII</span>';
-      html += '<tr><td class="cal-ticker-col">' + label + '</td>';
+      html += '<tr><td class="cal-ticker-col">' + label +
+        '<span class="cal-ticker-name">' + (row.name || '') + '</span></td>';
       for (var m2 = 0; m2 < row.months.length; m2++) {
         var cell = row.months[m2];
         var principal = calModoAtual === 'cota' ? cell.perShare : cell.total;
