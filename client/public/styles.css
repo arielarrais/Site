@@ -1659,7 +1659,7 @@ body.with-sidebar.sidebar-collapsed {
 
 .cal-table {
   font-size: 12px;
-  min-width: 880px;
+  min-width: 720px;
 }
 
 .cal-table th,
@@ -1677,6 +1677,10 @@ body.with-sidebar.sidebar-collapsed {
   z-index: 2;
   background: #fff;
   border-right: 2px solid #e8e8ff;
+  min-width: 70px;
+  max-width: 95px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .cal-table thead th.cal-ticker-col {
@@ -1688,16 +1692,7 @@ body.with-sidebar.sidebar-collapsed {
   background: #f0f2ff;
 }
 
-.cal-ticker-name {
-  display: block;
-  font-size: 10px;
-  font-weight: 400;
-  color: #888;
-  text-transform: none;
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .cal-ticker-name { display: none; }
 
 .cal-tag {
   display: inline-block;
