@@ -43,8 +43,8 @@ public class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
             throw new ArgumentException("Username and password are required.");
 
-        if (request.Password.Length < 4)
-            throw new ArgumentException("Password must be at least 4 characters.");
+        if (request.Password.Length < 8)
+            throw new ArgumentException("Password must be at least 8 characters.");
 
         if (await _userRepository.ExistsAsync(request.Username))
             throw new ArgumentException("Username already exists.");
@@ -60,6 +60,24 @@ public class AuthService : IAuthService
         await _userRepository.AddAsync(user);
 
         return new LoginResponse(user.Id, user.Username, user.Fullname ?? user.Username, GenerateToken(user));
+    }
+
+    public async Task ChangePasswordAsync(int userId, string currentPassword, string newPassword)
+    {
+        if (string.IsNullOrWhiteSpace(currentPassword))
+            throw new ArgumentException("Informe a senha atual.");
+
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            throw new ArgumentException("A nova senha deve ter pelo menos 8 caracteres.");
+
+        var user = await _userRepository.GetByIdAsync(userId)
+            ?? throw new UnauthorizedAccessException("Usuario nao encontrado.");
+
+        if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.Password))
+            throw new UnauthorizedAccessException("Senha atual incorreta.");
+
+        user.Password = BCrypt.Net.BCrypt.HashPassword(newPassword, 10);
+        await _userRepository.UpdateAsync(user);
     }
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SiteApi.Application.DTOs.Dividends;
 using SiteApi.Application.Interfaces;
@@ -5,25 +6,26 @@ using SiteApi.Application.Interfaces;
 namespace SiteApi.Presentation.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
-public class DividendsController : ControllerBase
+public class DividendsController : SecureApiController
 {
     private readonly IDividendService _dividendService;
 
     public DividendsController(IDividendService dividendService) => _dividendService = dividendService;
 
     [HttpGet]
-    public async Task<IActionResult> GetDividends([FromQuery] int? assetId, [FromQuery] string? ticker, [FromQuery] int? userId)
+    public async Task<IActionResult> GetDividends([FromQuery] int? assetId, [FromQuery] string? ticker)
     {
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized(new { error = "Sessao invalida." });
+
         try
         {
             if (!string.IsNullOrEmpty(ticker))
                 return Ok(await _dividendService.GetByTickerAsync(ticker));
             if (assetId.HasValue && assetId.Value > 0)
                 return Ok(await _dividendService.GetByAssetIdAsync(assetId.Value));
-            if (userId.HasValue && userId.Value > 0)
-                return Ok(await _dividendService.GetByUserIdAsync(userId.Value));
-            return Ok(new List<DividendDto>());
+            return Ok(await _dividendService.GetByUserIdAsync(userId));
         }
         catch
         {
@@ -32,9 +34,9 @@ public class DividendsController : ControllerBase
     }
 
     [HttpGet("monthly")]
-    public async Task<IActionResult> GetMonthlyDividends([FromQuery] int userId)
+    public async Task<IActionResult> GetMonthlyDividends()
     {
-        if (userId <= 0) return BadRequest(new { error = "userId é obrigatório." });
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized(new { error = "Sessao invalida." });
         try
         {
             var result = await _dividendService.GetMonthlyAsync(userId);
@@ -47,9 +49,9 @@ public class DividendsController : ControllerBase
     }
 
     [HttpGet("calendar")]
-    public async Task<IActionResult> GetDividendCalendar([FromQuery] int userId, [FromQuery] int? year)
+    public async Task<IActionResult> GetDividendCalendar([FromQuery] int? year)
     {
-        if (userId <= 0) return BadRequest(new { error = "userId é obrigatório." });
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized(new { error = "Sessao invalida." });
         var target = year is >= 1990 and <= 2100 ? year.Value : DateTime.Now.Year;
         try
         {

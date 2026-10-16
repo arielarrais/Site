@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using SiteApi.Domain.Entities;
 using SiteApi.Domain.Interfaces.Repositories;
 using SiteApi.Domain.Interfaces.Services;
@@ -11,16 +12,19 @@ public class DividendFetchingService : IDividendFetchingService
     private readonly IAssetRepository _assetRepo;
     private readonly IDividendRepository _dividendRepo;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly ILogger<DividendFetchingService> _logger;
     private const string UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     public DividendFetchingService(
         IAssetRepository assetRepo,
         IDividendRepository dividendRepo,
-        IHttpClientFactory httpFactory)
+        IHttpClientFactory httpFactory,
+        ILogger<DividendFetchingService> logger)
     {
         _assetRepo = assetRepo;
         _dividendRepo = dividendRepo;
         _httpFactory = httpFactory;
+        _logger = logger;
     }
 
     private sealed record FetchedDividend(string ComDate, string? PaymentDate, double GrossAmount, string Type);
@@ -37,18 +41,7 @@ public class DividendFetchingService : IDividendFetchingService
 
         try
         {
-            if (isFii)
-            {
-                dividends = await FetchInvistaInfoAsync(ticker);
-                if (dividends.Count > 0) source = "InvistaInfo";
-                else if ((dividends = await FetchFundamentusAsync(ticker, isFii: true)).Count > 0) source = "Fundamentus";
-                else if ((dividends = await FetchStockAnalysisAsync(ticker)).Count > 0) source = "StockAnalysis";
-            }
-            else
-            {
-                if ((dividends = await FetchFundamentusAsync(ticker, isFii: false)).Count > 0) source = "Fundamentus";
-                else if ((dividends = await FetchStockAnalysisAsync(ticker)).Count > 0) source = "StockAnalysis";
-            }
+            (dividends, source) = await FetchCombinedAsync(ticker, isFii);
         }
         catch
         {
@@ -71,6 +64,8 @@ public class DividendFetchingService : IDividendFetchingService
         {
             var paymentDate = string.IsNullOrEmpty(div.PaymentDate) ? div.ComDate : div.PaymentDate;
             var match = existing.FirstOrDefault(d => d.ComDate == div.ComDate);
+            if (match == null && !string.IsNullOrEmpty(paymentDate))
+                match = existing.FirstOrDefault(d => d.PaymentDate == paymentDate);
 
             if (match != null)
             {
@@ -111,6 +106,66 @@ public class DividendFetchingService : IDividendFetchingService
         return new FetchResult(source, inserted, updated, skipped, inserted + updated + skipped);
     }
 
+    private async Task<(List<FetchedDividend> Dividends, string Source)> FetchCombinedAsync(string ticker, bool isFii)
+    {
+        var result = new List<FetchedDividend>();
+        var source = "";
+        var newestSource = "";
+
+        var candidates = new List<(string Name, Func<Task<List<FetchedDividend>>> Fetch)>();
+        if (isFii) candidates.Add(("InvistaInfo", () => FetchInvistaInfoAsync(ticker)));
+        candidates.Add(("Fundamentus", () => FetchFundamentusAsync(ticker, isFii)));
+        candidates.Add(("StockAnalysis", () => FetchStockAnalysisAsync(ticker)));
+
+        var baselineOk = false;
+        string? baseMaxPay = null;
+        string? newestPay = null;
+
+        foreach (var (name, fetch) in candidates)
+        {
+            List<FetchedDividend> data;
+            try { data = await fetch(); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao buscar dividendos de {Ticker} em {Source}", ticker, name);
+                continue;
+            }
+            if (data.Count == 0)
+            {
+                _logger.LogWarning("Fonte {Source} retornou 0 proventos para {Ticker}", name, ticker);
+                continue;
+            }
+
+            if (!baselineOk)
+            {
+                result.AddRange(data);
+                baseMaxPay = data.Max(d => d.PaymentDate ?? d.ComDate);
+                newestPay = baseMaxPay;
+                newestSource = name;
+                baselineOk = true;
+                continue;
+            }
+
+            // A fonte principal pode estar desatualizada. Complementa com o historico
+            // mais recente das demais fontes, sem duplicar proventos ja consolidados.
+            foreach (var div in data)
+            {
+                var pay = div.PaymentDate ?? div.ComDate;
+                if (baseMaxPay == null || string.Compare(pay, baseMaxPay, StringComparison.Ordinal) > 0)
+                {
+                    result.Add(div);
+                    if (newestPay == null || string.Compare(pay, newestPay, StringComparison.Ordinal) > 0)
+                    {
+                        newestPay = pay;
+                        newestSource = name;
+                    }
+                }
+            }
+        }
+
+        return (result, newestSource ?? source);
+    }
+
     private async Task<List<FetchedDividend>> FetchInvistaInfoAsync(string ticker)
     {
         var dividends = new List<FetchedDividend>();
@@ -118,10 +173,9 @@ public class DividendFetchingService : IDividendFetchingService
         {
             var client = NewClient();
             var url = $"https://invistainfo.com.br/ativo.php?fii={Uri.EscapeDataString(ticker)}";
-            var response = await client.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return dividends;
+            var html = await GetHtmlWithRetryAsync(client, url, "InvistaInfo", ticker);
+            if (html == null) return dividends;
 
-            var html = await response.Content.ReadAsStringAsync();
             var tables = Regex.Matches(html, "<table[\\s\\S]*?<\\/table>", RegexOptions.IgnoreCase);
 
             // A pagina tem varias tabelas: a primeira e apenas o "ultimo rendimento" (1 linha),
@@ -146,7 +200,7 @@ public class DividendFetchingService : IDividendFetchingService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "InvistaInfo {Ticker}: erro", ticker); }
 
         return dividends;
     }
@@ -162,9 +216,8 @@ public class DividendFetchingService : IDividendFetchingService
             var url = $"https://fundamentus.com.br/{path}.php?papel={Uri.EscapeDataString(ticker)}";
             try
             {
-                var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) continue;
-                var html = await response.Content.ReadAsStringAsync();
+                var html = await GetHtmlWithRetryAsync(client, url, "Fundamentus", ticker);
+                if (html == null) continue;
                 var rows = Regex.Matches(html, "<tr[^>]*>[\\s\\S]*?<\\/tr>", RegexOptions.IgnoreCase);
                 var found = false;
 
@@ -201,7 +254,11 @@ public class DividendFetchingService : IDividendFetchingService
 
                 if (found) return dividends;
             }
-            catch { continue; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Fundamentus {Ticker} ({Path}): erro", ticker, path);
+                continue;
+            }
         }
 
         return dividends;
@@ -214,10 +271,9 @@ public class DividendFetchingService : IDividendFetchingService
         {
             var client = NewClient();
             var url = $"https://stockanalysis.com/quote/bvmf/{Uri.EscapeDataString(ticker)}/dividend/";
-            var response = await client.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return dividends;
+            var html = await GetHtmlWithRetryAsync(client, url, "StockAnalysis", ticker);
+            if (html == null) return dividends;
 
-            var html = await response.Content.ReadAsStringAsync();
             var rows = Regex.Matches(html, "<tr[^>]*>[\\s\\S]*?<\\/tr>", RegexOptions.IgnoreCase);
 
             foreach (Match row in rows)
@@ -235,7 +291,7 @@ public class DividendFetchingService : IDividendFetchingService
                 DividendsAddNew(dividends, new FetchedDividend(comDate, payDate ?? comDate, amount.Value, "rendimento"));
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogWarning(ex, "StockAnalysis {Ticker}: erro", ticker); }
 
         return dividends;
     }
@@ -253,6 +309,42 @@ public class DividendFetchingService : IDividendFetchingService
             client.DefaultRequestHeaders.Add("User-Agent", UA);
         client.Timeout = TimeSpan.FromSeconds(60);
         return client;
+    }
+
+    // Faz a requisicao tratando limite de taxa (HTTP 429) e erros temporarios (5xx)
+    // com espera progressiva (respeitando Retry-After quando presente).
+    private async Task<string?> GetHtmlWithRetryAsync(HttpClient client, string url, string source, string ticker)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var response = await client.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsStringAsync();
+
+                var status = (int)response.StatusCode;
+                if (status != 429 && status < 500)
+                {
+                    _logger.LogWarning("{Source} {Ticker}: HTTP {Status}", source, ticker, status);
+                    return null;
+                }
+
+                var wait = response.Headers.RetryAfter?.Delta
+                           ?? TimeSpan.FromSeconds(Math.Min(30 * attempt, 90));
+                _logger.LogWarning("{Source} {Ticker}: HTTP {Status}, aguardando {Wait}s (tentativa {Attempt}/{Max})",
+                    source, ticker, status, (int)wait.TotalSeconds, attempt, maxAttempts);
+                await Task.Delay(wait);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "{Source} {Ticker}: erro (tentativa {Attempt}/{Max})", source, ticker, attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(3 * attempt));
+            }
+        }
+
+        return null;
     }
 
     private static string? ParseBrDate(string? raw)

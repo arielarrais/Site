@@ -23,6 +23,12 @@ public class UserRepository : IUserRepository
         return user;
     }
 
+    public async Task UpdateAsync(User user)
+    {
+        _db.Users.Update(user);
+        await _db.SaveChangesAsync();
+    }
+
     public async Task<bool> ExistsAsync(string username) =>
         await _db.Users.AnyAsync(u => u.Username == username);
 

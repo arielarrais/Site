@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -13,8 +14,9 @@ using SiteApi.Infrastructure.Data;
 namespace SiteApi.Presentation.Controllers;
 
 [ApiController]
+[Authorize(Policy = "admin")]
 [Route("api/[controller]")]
-public class AdminController : ControllerBase
+public class AdminController : SecureApiController
 {
     private readonly IAssetRepository _assetRepository;
     private readonly IDividendRepository _dividendRepository;
@@ -145,6 +147,9 @@ public class AdminController : ControllerBase
                 {
                     DividendSyncStatus.Processed(a.Ticker, "erro", 0, 0, 0);
                 }
+
+                // Espaca as requisicoes para nao estourar o limite de taxa das fontes (HTTP 429).
+                await Task.Delay(TimeSpan.FromMilliseconds(1200));
             }
 
             DividendSyncStatus.Finish();

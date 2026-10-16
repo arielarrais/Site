@@ -119,6 +119,16 @@ if (window.location.pathname === '/') {
     loginCard.classList.remove('hidden');
   };
 
+  // Registro aberto e opcional: some com o link quando o admin desativou.
+  fetch('/api/auth/config')
+    .then(r => r.json())
+    .then(cfg => {
+      if (cfg && cfg.allowSelfRegistration) return;
+      document.getElementById('show-register')?.classList.add('hidden');
+      registerCard?.classList.add('hidden');
+    })
+    .catch(() => {});
+
   document.getElementById('login-form').onsubmit = async (e) => {
     e.preventDefault();
     const errorEl = document.getElementById('login-error');

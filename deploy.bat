@@ -33,7 +33,7 @@ if errorlevel 1 (
 
 echo.
 echo Construindo e subindo os containers...
-docker compose up -d --build web
+docker compose up -d --build web proxy
 
 if errorlevel 1 (
     echo.
@@ -47,5 +47,6 @@ echo Site atualizado com sucesso!
 echo Acesse: http://localhost:3001
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\ip-externa.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\atualizar-ddns.ps1"
 echo.
 pause
