@@ -133,12 +133,32 @@
 
   var MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-  var calHead = document.getElementById('cal-head');
-  var calBody = document.getElementById('cal-body');
-  var calFoot = document.getElementById('cal-foot');
-  var calAno = document.getElementById('cal-ano');
-  var calModo = document.getElementById('cal-modo');
-  var calLegenda = document.getElementById('cal-legenda');
+   var calHead = document.getElementById('cal-head');
+   var calBody = document.getElementById('cal-body');
+   var calFoot = document.getElementById('cal-foot');
+   var calAno = document.getElementById('cal-ano');
+   var calModo = document.getElementById('cal-modo');
+   var calLegenda = document.getElementById('cal-legenda');
+   var calWrap = document.getElementById('cal-wrap');
+
+   function adjustCalendarHeight() {
+     if (!calWrap) return;
+     if (!calData || !Array.isArray(calData.rows)) {
+       calWrap.style.height = '220px';
+       return;
+     }
+     var rowCount = calData.rows.length;
+     if (rowCount === 0) {
+       calWrap.style.height = '220px';
+       return;
+     }
+     var headerHeight = 38;
+     var footerHeight = 38;
+     var rowHeight = 36;
+     var calculated = headerHeight + rowCount * rowHeight + footerHeight + 10;
+     var maxByViewport = window.innerHeight - 340;
+     calWrap.style.height = Math.min(calculated, maxByViewport) + 'px';
+   }
 
   var calData = null;
   var calYear = new Date().getFullYear();
@@ -153,95 +173,127 @@
     return String(Number(v).toFixed(4)).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',');
   }
 
-  function renderCalendar() {
-    if (!calData) return;
+   function renderCalendar() {
+     if (!calData) return;
 
-    var head = '<th class="cal-ticker-col">Ativo</th>';
-    for (var m = 0; m < 12; m++) head += '<th>' + MESES[m] + '</th>';
-    head += '<th>Total ' + calYear + '</th>';
-    calHead.innerHTML = head;
+     var head = '<th class="cal-ticker-col">Ativo</th>';
+     for (var m = 0; m < 12; m++) head += '<th>' + MESES[m] + '</th>';
+     head += '<th>Var. vs mês ant.</th>';
+     head += '<th>Total ' + calYear + '</th>';
+     calHead.innerHTML = head;
 
-    var totals = new Array(12).fill(0);
-    var html = '';
-    for (var i = 0; i < calData.rows.length; i++) {
-      var row = calData.rows[i];
-      var label = '<strong>' + row.ticker + '</strong>';
-      if (row.isFii) label += '<span class="cal-tag">FII</span>';
-      html += '<tr><td class="cal-ticker-col">' + label + '</td>';
-      for (var m2 = 0; m2 < row.months.length; m2++) {
-        var cell = row.months[m2];
-        var principal = calModoAtual === 'cota' ? cell.perShare : cell.total;
-        var secundario = calModoAtual === 'cota' ? cell.total : cell.perShare;
-        var fmtSec = calModoAtual === 'cota' ? fmtNumber(secundario, 2, 2) : fmtValor(secundario);
-        var titulo = cell.payments + ' provento(s) em ' + MESES[m2] + '/' + calYear +
-          ' | por cota: R$ ' + fmtValor(cell.perShare) +
-          ' | total recebido: R$ ' + fmtNumber(cell.total, 2, 2);
-        html += '<td class="cal-cell' + (principal > 0 ? '' : ' zero') + '" title="' + titulo + '">' +
-          fmtValor(principal) +
-          '<span class="cal-sub">' + (secundario > 0 ? fmtSec : '–') + '</span></td>';
-        totals[m2] += principal;
-      }
-      var anoValor = calModoAtual === 'cota' ? row.perShareYear : row.totalYear;
-      html += '<td class="cal-total-year">' + fmtValor(anoValor) + '</td></tr>';
-    }
+     var totals = new Array(12).fill(0);
+     var html = '';
+     for (var i = 0; i < calData.rows.length; i++) {
+       var row = calData.rows[i];
+       var label = '<strong>' + row.ticker + '</strong>';
+       if (row.isFii) label += '<span class="cal-tag">FII</span>';
+       html += '<tr><td class="cal-ticker-col">' + label + '</td>';
+       var valuesByMonth = new Array(12).fill(0);
+       for (var m2 = 0; m2 < row.months.length; m2++) {
+         var cell = row.months[m2];
+         var principal = calModoAtual === 'cota' ? cell.perShare : cell.total;
+         var secundario = calModoAtual === 'cota' ? cell.total : cell.perShare;
+         var fmtSec = calModoAtual === 'cota' ? fmtNumber(secundario, 2, 2) : fmtValor(secundario);
+         var titulo = cell.payments + ' provento(s) em ' + MESES[m2] + '/' + calYear +
+           ' | por cota: R$ ' + fmtValor(cell.perShare) +
+           ' | total recebido: R$ ' + fmtNumber(cell.total, 2, 2);
+         html += '<td class="cal-cell' + (principal > 0 ? '' : ' zero') + '" title="' + titulo + '">' +
+           fmtValor(principal) +
+           '<span class="cal-sub">' + (secundario > 0 ? fmtSec : '–') + '</span></td>';
+         totals[m2] += principal;
+         valuesByMonth[m2] = principal;
+       }
 
-    if (!calData.rows.length) {
-      html = '<tr><td colspan="14" style="text-align:center;padding:24px;color:#999">Nenhum ativo na carteira.</td></tr>';
-      calBody.innerHTML = html;
-      calFoot.innerHTML = '';
-      return;
-    }
+       var lastIdx = -1;
+       var prevIdx = -1;
+       for (var vm = 11; vm >= 0; vm--) {
+         if (valuesByMonth[vm] > 0 && lastIdx === -1) {
+           lastIdx = vm;
+         } else if (valuesByMonth[vm] > 0 && lastIdx !== -1 && prevIdx === -1) {
+           prevIdx = vm;
+           break;
+         }
+       }
 
-    var totalAno = calModoAtual === 'cota'
-      ? calData.rows.reduce(function (s, r) { return s + r.perShareYear; }, 0)
-      : calData.rows.reduce(function (s, r) { return s + r.totalYear; }, 0);
+       var varCellHtml = '–';
+       if (lastIdx >= 0 && prevIdx >= 0 && valuesByMonth[prevIdx] > 0) {
+         var pct = (valuesByMonth[lastIdx] / valuesByMonth[prevIdx] - 1) * 100;
+         var sign = pct >= 0 ? '+' : '';
+         var cor = pct >= 0 ? '#27ae60' : '#e74c3c';
+         varCellHtml = '<span style="color:' + cor + ';font-weight:600">' + sign + fmtNumber(pct, 1, 1) + '%</span>';
+       }
 
-    var foot = '<tr class="cal-foot-row"><td class="cal-ticker-col">Total</td>';
-    for (var m3 = 0; m3 < 12; m3++) foot += '<td>' + fmtValor(totals[m3]) + '</td>';
-    foot += '<td class="cal-total-year">' + fmtValor(totalAno) + '</td></tr>';
+       html += '<td style="text-align:center">' + varCellHtml + '</td>';
+       var anoValor = calModoAtual === 'cota' ? row.perShareYear : row.totalYear;
+       html += '<td class="cal-total-year">' + fmtValor(anoValor) + '</td></tr>';
+     }
 
-    calBody.innerHTML = html;
-    calFoot.innerHTML = foot;
+     if (!calData.rows.length) {
+       html = '<tr><td colspan="15" style="text-align:center;padding:24px;color:#999">Nenhum ativo na carteira.</td></tr>';
+       calBody.innerHTML = html;
+       calFoot.innerHTML = '';
+       adjustCalendarHeight();
+       return;
+     }
 
-    calLegenda.textContent = calModoAtual === 'cota'
-      ? 'Valor por cota pago no mês (R$) e, em cinza abaixo, o total recebido na carteira.'
-      : 'Total recebido na carteira no mês (R$) e, em cinza abaixo, o valor por cota.';
-  }
+     var totalAno = calModoAtual === 'cota'
+       ? calData.rows.reduce(function (s, r) { return s + r.perShareYear; }, 0)
+       : calData.rows.reduce(function (s, r) { return s + r.totalYear; }, 0);
 
-  function loadCalendar(year) {
-    calYear = year;
-    calBody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:24px;color:#999">Carregando...</td></tr>';
-    calFoot.innerHTML = '';
-    req('/api/dividends/calendar?userId=' + encodeURIComponent(currentUser.id) + '&year=' + year)
-      .then(function (data) {
-        calData = data;
-        calData.rows.forEach(function (r) { r.months.sort(function (a, b) { return a.month - b.month; }); });
-        calAno.innerHTML = '';
-        (data.availableYears || []).forEach(function (y) {
-          var opt = document.createElement('option');
-          opt.value = y;
-          opt.textContent = y;
-          if (y === calYear) opt.selected = true;
-          calAno.appendChild(opt);
-        });
-        renderCalendar();
-      })
-      .catch(function (e) {
-        calBody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:24px;color:#e74c3c">Erro ao carregar: ' + e.message + '</td></tr>';
-      });
-  }
+     var foot = '<tr class="cal-foot-row"><td class="cal-ticker-col">Total</td>';
+     for (var m3 = 0; m3 < 12; m3++) foot += '<td>' + fmtValor(totals[m3]) + '</td>';
+     foot += '<td>–</td>';
+     foot += '<td class="cal-total-year">' + fmtValor(totalAno) + '</td></tr>';
 
-  calAno.addEventListener('change', function () { loadCalendar(parseInt(calAno.value, 10)); });
+     calBody.innerHTML = html;
+     calFoot.innerHTML = foot;
 
-  calModo.addEventListener('click', function (e) {
-    var btn = e.target.closest('.cal-modo-btn');
-    if (!btn) return;
-    calModoAtual = btn.dataset.modo;
-    calModo.querySelectorAll('.cal-modo-btn').forEach(function (b) {
-      b.classList.toggle('active', b === btn);
-    });
-    renderCalendar();
-  });
+     calLegenda.textContent = calModoAtual === 'cota'
+       ? 'Valor por cota pago no mês (R$) e, em cinza abaixo, o total recebido na carteira.'
+       : 'Total recebido na carteira no mês (R$) e, em cinza abaixo, o valor por cota.';
 
-  loadCalendar(calYear);
+     adjustCalendarHeight();
+   }
+
+   function loadCalendar(year) {
+     calYear = year;
+     calBody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:24px;color:#999">Carregando...</td></tr>';
+     calFoot.innerHTML = '';
+     if (calWrap) calWrap.style.height = '220px';
+     req('/api/dividends/calendar?userId=' + encodeURIComponent(currentUser.id) + '&year=' + year)
+       .then(function (data) {
+         calData = data;
+         calData.rows.forEach(function (r) { r.months.sort(function (a, b) { return a.month - b.month; }); });
+         calAno.innerHTML = '';
+         (data.availableYears || []).forEach(function (y) {
+           var opt = document.createElement('option');
+           opt.value = y;
+           opt.textContent = y;
+           if (y === calYear) opt.selected = true;
+           calAno.appendChild(opt);
+         });
+         renderCalendar();
+       })
+       .catch(function (e) {
+         calBody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:24px;color:#e74c3c">Erro ao carregar: ' + e.message + '</td></tr>';
+         adjustCalendarHeight();
+       });
+   }
+
+   calAno.addEventListener('change', function () { loadCalendar(parseInt(calAno.value, 10)); });
+
+   calModo.addEventListener('click', function (e) {
+     var btn = e.target.closest('.cal-modo-btn');
+     if (!btn) return;
+     calModoAtual = btn.dataset.modo;
+     calModo.querySelectorAll('.cal-modo-btn').forEach(function (b) {
+       b.classList.toggle('active', b === btn);
+     });
+     renderCalendar();
+   });
+
+   window.addEventListener('resize', adjustCalendarHeight);
+
+   loadCalendar(calYear);
 })();
