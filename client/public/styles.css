@@ -1654,7 +1654,8 @@ body.with-sidebar.sidebar-collapsed {
 
 .cal-wrap {
   height: auto;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   margin-top: 0;
 }
 

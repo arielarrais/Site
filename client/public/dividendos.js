@@ -143,21 +143,9 @@
 
    function adjustCalendarHeight() {
      if (!calWrap) return;
-     if (!calData || !Array.isArray(calData.rows)) {
-       calWrap.style.height = '220px';
-       return;
-     }
-     var rowCount = calData.rows.length;
-     if (rowCount === 0) {
-       calWrap.style.height = '220px';
-       return;
-     }
-     var headerHeight = 38;
-     var footerHeight = 38;
-     var rowHeight = 36;
-     var calculated = headerHeight + rowCount * rowHeight + footerHeight + 10;
-     var maxByViewport = window.innerHeight - 340;
-     calWrap.style.height = Math.min(calculated, maxByViewport) + 'px';
+     calWrap.style.height = 'auto';
+     calWrap.style.maxHeight = 'none';
+     calWrap.style.overflow = 'visible';
    }
 
   var calData = null;
@@ -260,7 +248,11 @@
      calYear = year;
      calBody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:24px;color:#999">Carregando...</td></tr>';
      calFoot.innerHTML = '';
-     if (calWrap) calWrap.style.height = '220px';
+     if (calWrap) {
+       calWrap.style.height = 'auto';
+       calWrap.style.maxHeight = 'none';
+       calWrap.style.overflow = 'visible';
+     }
      req('/api/dividends/calendar?userId=' + encodeURIComponent(currentUser.id) + '&year=' + year)
        .then(function (data) {
          calData = data;
